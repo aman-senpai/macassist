@@ -23,7 +23,7 @@ final class VoiceAssistantController: NSObject, ObservableObject, AVSpeechSynthe
     // Error state for alerts
     @Published var showingSpeechErrorAlert: Bool = false
     @Published var speechErrorMessage: String = ""
-
+    
     // MARK: - Private Properties
     private let speechRecognizer = SFSpeechRecognizer()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -34,25 +34,27 @@ final class VoiceAssistantController: NSObject, ObservableObject, AVSpeechSynthe
     
     private let speechSynthesizer = AVSpeechSynthesizer()
     private var cancellables = Set<AnyCancellable>()
-
+    
     // MARK: - Initialization
     override init() {
         super.init()
         speechSynthesizer.delegate = self
         
         // Observe agent's spoken response to trigger text-to-speech
-        agent.$spokenResponse
+        agent.$messages
             .receive(on: DispatchQueue.main)
-            .compactMap { $0 }
-            .sink { [weak self] newResponse in
-                if !newResponse.isEmpty {
-                    self?.speak(text: newResponse)
-                    self?.agent.spokenResponse = nil // Clear after handling
+            .sink { [weak self] messages in
+                guard let self = self, let lastMessage = messages.last, lastMessage.role == "assistant" else {
+                    return
+                }
+                
+                if self.isContinuousConversationActive {
+                    self.speak(text: lastMessage.content ?? "")
                 }
             }
             .store(in: &cancellables)
     }
-
+    
     // MARK: - Public Methods
     
     func toggleContinuousConversation() {
@@ -91,11 +93,15 @@ final class VoiceAssistantController: NSObject, ObservableObject, AVSpeechSynthe
     }
     
     // AVSpeechSynthesizerDelegate callback
-    func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         // After AI finishes speaking, if we're in continuous mode, restart listening.
-        if isContinuousConversationActive {
-            print("AI speech finished. Restarting listening.")
-            startRecording()
+        Task {
+            await MainActor.run {
+                if self.isContinuousConversationActive {
+                    print("AI speech finished. Restarting listening.")
+                    self.startRecording()
+                }
+            }
         }
     }
     
@@ -104,127 +110,136 @@ final class VoiceAssistantController: NSObject, ObservableObject, AVSpeechSynthe
     private func startSilenceTimer() {
         silenceTimer?.invalidate()
         silenceTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
-            print("Silence detected, ending audio recognition request.")
-            self?.recognitionRequest?.endAudio()
-            self?.silenceTimer?.invalidate()
-            self?.silenceTimer = nil
+            Task {
+                await MainActor.run {
+                    print("Silence detected, ending audio recognition request.")
+                    self?.recognitionRequest?.endAudio()
+                    self?.silenceTimer?.invalidate()
+                    self?.silenceTimer = nil
+                }
+            }
         }
     }
     
     func requestSpeechAuthorization() {
         SFSpeechRecognizer.requestAuthorization { [weak self] authStatus in
-            OperationQueue.main.addOperation {
-                self?.speechAuthorizationStatus = authStatus
-                if authStatus != .authorized {
-                    self?.speechErrorMessage = "Speech recognition access is required. Please enable it in System Settings > Privacy & Security."
-                    self?.showingSpeechErrorAlert = true
+            Task {
+                await MainActor.run {
+                    self?.speechAuthorizationStatus = authStatus
+                    if authStatus != .authorized {
+                        self?.speechErrorMessage = "Speech recognition access is required. Please enable it in System Settings > Privacy & Security."
+                        self?.showingSpeechErrorAlert = true
+                    }
                 }
             }
         }
     }
     
-    private func startRecording() {
-        // Barge-in: If the AI is speaking, interrupt it.
-        if speechSynthesizer.isSpeaking {
-            speechSynthesizer.stopSpeaking(at: .immediate)
-        }
-        
-        guard speechAuthorizationStatus == .authorized, let speechRecognizer = speechRecognizer, speechRecognizer.isAvailable else {
-            speechErrorMessage = "Speech recognition is not authorized or available."
-            showingSpeechErrorAlert = true
-            isContinuousConversationActive = false
-            return
-        }
-        
-        // Ensure any previous session is completely torn down before starting a new one.
-        stopAudioEngine()
-        
-        do {
-            recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
-            guard let recognitionRequest = recognitionRequest else { throw URLError(.cannotCreateFile) }
-            recognitionRequest.shouldReportPartialResults = true
-            
-            let inputNode = audioEngine.inputNode
-            let recordingFormat = inputNode.outputFormat(forBus: 0)
-            inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
-                self.recognitionRequest?.append(buffer)
+        private func startRecording() {
+            // Barge-in: If the AI is speaking, interrupt it.
+            if speechSynthesizer.isSpeaking {
+                speechSynthesizer.stopSpeaking(at: .immediate)
             }
             
-            audioEngine.prepare()
-            try audioEngine.start()
-            startSilenceTimer()
-            
-            isRecording = true
-            
-            recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
-                guard let self = self else { return }
-                var isFinal = false
-                
-                if let result = result {
-                    self.currentInput = result.bestTranscription.formattedString
-                    isFinal = result.isFinal
-                    if !self.currentInput.isEmpty {
-                        self.startSilenceTimer()
-                    }
-                }
-                
-                if error != nil || isFinal {
-                    self.stopAudioEngine()
-                    let trimmedInput = self.currentInput.trimmingCharacters(in: .whitespacesAndNewlines)
-
-                    // Success Case: A final, non-empty transcript was received.
-                    if isFinal, !trimmedInput.isEmpty {
-                        self.sendMessage()
-                        // Don't return; allow cleanup logic below to run
-                    }
-                    
-                    // Error & Empty Result Handling:
-                    if let error = error {
-                        print("Speech recognition failed, handling silently: \(error.localizedDescription)")
-                    }
-                    
-                    // For any non-success case (error or empty final transcript),
-                    // pause the continuous conversation mode if it's active.
-                    if self.isContinuousConversationActive && (error != nil || trimmedInput.isEmpty) {
-                        print("Pausing continuous conversation due to empty or failed recognition.")
-                        self.isContinuousConversationActive = false
-                    }
-                    
-                    self.currentInput = "" // Always clear the input after processing is finished.
-                }
+            guard speechAuthorizationStatus == .authorized, let speechRecognizer = speechRecognizer, speechRecognizer.isAvailable else {
+                speechErrorMessage = "Speech recognition is not authorized or available."
+                showingSpeechErrorAlert = true
+                isContinuousConversationActive = false
+                return
             }
-        } catch {
-            print("Error starting audio engine, handling silently: \(error.localizedDescription)")
+            
+            // Ensure any previous session is completely torn down before starting a new one.
             stopAudioEngine()
-            isContinuousConversationActive = false
+            
+            do {
+                recognitionRequest = SFSpeechAudioBufferRecognitionRequest()
+                guard let recognitionRequest = recognitionRequest else { throw URLError(.cannotCreateFile) }
+                recognitionRequest.shouldReportPartialResults = true
+                
+                let inputNode = audioEngine.inputNode
+                let recordingFormat = inputNode.outputFormat(forBus: 0)
+                inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
+                    self.recognitionRequest?.append(buffer)
+                }
+                
+                audioEngine.prepare()
+                try audioEngine.start()
+                startSilenceTimer()
+                
+                isRecording = true
+                
+                            recognitionTask = speechRecognizer.recognitionTask(with: recognitionRequest) { [weak self] result, error in
+                                Task {
+                                    await MainActor.run {
+                                        guard let self = self else { return }
+                                        var isFinal = false
+                                        
+                                        if let result = result {
+                                            self.currentInput = result.bestTranscription.formattedString
+                                            isFinal = result.isFinal
+                                            if !self.currentInput.isEmpty {
+                                                self.startSilenceTimer()
+                                            }
+                                        }
+                                        
+                                        if error != nil || isFinal {
+                                            self.stopAudioEngine()
+                                            let trimmedInput = self.currentInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                
+                                            // Success Case: A final, non-empty transcript was received.
+                                            if isFinal, !trimmedInput.isEmpty {
+                                                self.sendMessage()
+                                                // Don't return; allow cleanup logic below to run
+                                            }
+                                            
+                                            // Error & Empty Result Handling:
+                                            if let error = error {
+                                                print("Speech recognition failed, handling silently: \(error.localizedDescription)")
+                                            }
+                                            
+                                            // For any non-success case (error or empty final transcript),
+                                            // pause the continuous conversation mode if it's active.
+                                            if self.isContinuousConversationActive && (error != nil || trimmedInput.isEmpty) {
+                                                print("Pausing continuous conversation due to empty or failed recognition.")
+                                                self.isContinuousConversationActive = false
+                                            }
+                                            
+                                            self.currentInput = "" // Always clear the input after processing is finished.
+                                        }
+                                    }
+                                }
+                            }            } catch {
+                print("Error starting audio engine, handling silently: \(error.localizedDescription)")
+                stopAudioEngine()
+                isContinuousConversationActive = false
+            }
         }
-    }
     
-    private func stopRecording() {
-        // This is for explicit user stops. Finalize the recognition to process any buffered speech.
-        if audioEngine.isRunning {
-            recognitionRequest?.endAudio()
-            recognitionTask?.finish()
+        private func stopRecording() {
+            // This is for explicit user stops. Finalize the recognition to process any buffered speech.
+            if audioEngine.isRunning {
+                recognitionRequest?.endAudio()
+                recognitionTask?.finish()
+            }
+            // Ensure cleanup even if the engine wasn't running.
+            stopAudioEngine()
         }
-        // Ensure cleanup even if the engine wasn't running.
-        stopAudioEngine()
-    }
-
-    private func stopAudioEngine() {
-        // This is now the single, robust cleanup function. It is safe to call multiple times.
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            // A tap is only guaranteed to exist if the engine was running.
-            // Removing it conditionally prevents crashes.
-            audioEngine.inputNode.removeTap(onBus: 0)
+    
+        private func stopAudioEngine() {
+            // This is now the single, robust cleanup function. It is safe to call multiple times.
+            if audioEngine.isRunning {
+                audioEngine.stop()
+                // A tap is only guaranteed to exist if the engine was running.
+                // Removing it conditionally prevents crashes.
+                audioEngine.inputNode.removeTap(onBus: 0)
+            }
+            
+            recognitionRequest = nil
+            recognitionTask?.cancel() // Cancel to prevent any lingering completion handlers.
+            recognitionTask = nil
+            
+            isRecording = false
+            silenceTimer?.invalidate()
+            silenceTimer = nil
         }
-        
-        recognitionRequest = nil
-        recognitionTask?.cancel() // Cancel to prevent any lingering completion handlers.
-        recognitionTask = nil
-        
-        isRecording = false
-        silenceTimer?.invalidate()
-        silenceTimer = nil
     }
-}

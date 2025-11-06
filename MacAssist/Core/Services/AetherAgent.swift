@@ -413,7 +413,6 @@ final class AetherAgent: ObservableObject {
         print("Assistant message:", content)
         let message = ChatMessage(id: UUID(), role: "assistant", content: content)
         messages.append(message)
-        spokenResponse = content // This triggers the speech service to speak
     }
 
     // MARK: - Tool Execution
