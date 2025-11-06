@@ -7,7 +7,7 @@
 
 import Foundation
 import AppKit
-import UniformTypeIdentifiers
+import UniformTypeIdentifiers // This import is not directly used in the provided SystemTools code, but is harmless.
 
 // MARK: - Error Handling
 
@@ -67,19 +67,23 @@ final class SystemTools {
   // --- Application Control Tools ---
 
   func openApplication(name: String) -> Result<String, ToolExecutionError> {
-    let success = NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/\(name).app"))
-    if success {
-      return .success("Successfully opened the application: \(name).")
-    } else {
-      let shellCommand = "open -a \"\(name)\""
-      let result = runShellCommandSync(command: shellCommand)
-     
-      switch result {
-      case .success(let output):
+    let appPath = "/Applications/\(name).app"
+    if FileManager.default.fileExists(atPath: appPath) {
+        let success = NSWorkspace.shared.open(URL(fileURLWithPath: appPath))
+        if success {
+            return .success("Successfully opened the application: \(name).")
+        }
+    }
+    
+    // If direct opening fails or app not found, try 'open -a' shell command
+    let shellCommand = "open -a \"\(name)\""
+    let result = runShellCommandSync(command: shellCommand)
+   
+    switch result {
+    case .success(let output):
         return .success("Successfully launched application: \(name). Shell output: \(output)")
-      case .failure:
+    case .failure:
         return .failure(.unexpectedError("Error: Could not find or open application '\(name)'. Please ensure the app name is correct and in the Applications folder."))
-      }
     }
   }
 
@@ -385,3 +389,4 @@ final class SystemTools {
     return .success("Successfully opened the website: \(url)")
   }
 }
+

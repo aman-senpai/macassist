@@ -21,7 +21,7 @@ enum ConversationError: Error, LocalizedError, Equatable {
     case speechRecognizerUnavailable
     case audioEngineFailed(Error) // New: For errors related to starting the audio engine
     case noSpeechDetected
-    case openAIError(OpenAIServiceError) // New: For errors from the OpenAI service
+    case openAIError(AIServiceError) // New: For errors from the OpenAI service
     case conversationManagerNotReady // New: For cases where OpenAI service isn't initialized
     case unknownError(Error) // ADDED: For generic, unhandled errors
 
@@ -111,8 +111,8 @@ class ConversationManager: NSObject, ObservableObject, SFSpeechRecognizerDelegat
 
 
     // MARK: - AI Integration Properties
-    private var openAIService: OpenAIService?
-    private var conversationMessages: [OpenAIService.ChatMessage] = [] // CHANGED: Qualified ChatMessage
+    private var openAIService: AIService?
+    private var conversationMessages: [AIService.ChatMessage] = [] // CHANGED: Qualified ChatMessage
 
     // The system prompt to initialize the AI conversation, matching your Python script.
     private let systemPrompt = """
@@ -133,7 +133,7 @@ class ConversationManager: NSObject, ObservableObject, SFSpeechRecognizerDelegat
         
         // Initialize OpenAI Service
         do {
-            self.openAIService = try OpenAIService()
+            self.openAIService = try AIService()
         } catch {
             print("Failed to initialize OpenAI Service: \(error.localizedDescription)")
             self.state = .error(error as? ConversationError ?? .conversationManagerNotReady)
@@ -146,7 +146,7 @@ class ConversationManager: NSObject, ObservableObject, SFSpeechRecognizerDelegat
 
     private func setupInitialConversationMessages() {
         // CHANGED: Qualified ChatMessage and ChatRole
-        conversationMessages = [OpenAIService.ChatMessage(role: .system, content: systemPrompt)]
+        conversationMessages = [AIService.ChatMessage(role: .system, content: systemPrompt)]
     }
 
     // MARK: - Permission Handling
@@ -309,7 +309,7 @@ class ConversationManager: NSObject, ObservableObject, SFSpeechRecognizerDelegat
 
         // Add user's message to the conversation history
         // CHANGED: Qualified ChatMessage and ChatRole
-        conversationMessages.append(OpenAIService.ChatMessage(role: .user, content: text))
+        conversationMessages.append(AIService.ChatMessage(role: .user, content: text))
 
         Task {
             do {
@@ -318,10 +318,10 @@ class ConversationManager: NSObject, ObservableObject, SFSpeechRecognizerDelegat
                     self.aiResponse = aiResponseContent
                     // Add AI's response to the conversation history
                     // CHANGED: Qualified ChatMessage and ChatRole
-                    self.conversationMessages.append(OpenAIService.ChatMessage(role: .assistant, content: aiResponseContent))
+                    self.conversationMessages.append(AIService.ChatMessage(role: .assistant, content: aiResponseContent))
                     self.speakResponse(aiResponseContent)
                 }
-            } catch let serviceError as OpenAIServiceError {
+            } catch let serviceError as AIServiceError {
                 DispatchQueue.main.async {
                     print("OpenAI Service Error: \(serviceError.localizedDescription)")
                     self.state = .error(.openAIError(serviceError))

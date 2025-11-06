@@ -1,8 +1,8 @@
 import Foundation
 
-// MARK: - OpenAIService and Error Handling
+// MARK: - AIService and Error Handling
 
-enum OpenAIServiceError: Error, LocalizedError {
+enum AIServiceError: Error, LocalizedError {
     case invalidAPIKey
     case invalidURL
     case noData
@@ -22,13 +22,13 @@ enum OpenAIServiceError: Error, LocalizedError {
     }
 }
 
-class OpenAIService {
+class AIService {
     private let apiKey: String
     private let session: URLSession
 
     // MARK: - OpenAI Chat Completion Models (Nested Types)
-    // These types are nested within OpenAIService to prevent global ambiguity
-    // and are accessed as OpenAIService.ChatRole and OpenAIService.ChatMessage.
+    // These types are nested within AIService to prevent global ambiguity
+    // and are accessed as AIService.ChatRole and AIService.ChatMessage.
 
     // Enum for chat message roles (system, user, assistant)
     enum ChatRole: String, Codable, Equatable { // Added Equatable for consistency
@@ -46,7 +46,7 @@ class OpenAIService {
     // Struct for the request payload sent to the OpenAI API
     struct ChatCompletionRequest: Codable {
         let model: String
-        let messages: [ChatMessage] // References OpenAIService.ChatMessage
+        let messages: [ChatMessage] // References AIService.ChatMessage
         let temperature: Double? // Optional: controls randomness (creativity)
         let max_tokens: Int?    // Optional: sets the maximum length of the response
         let stream: Bool?       // Optional: for streaming partial responses (not used in this non-streaming example)
@@ -75,7 +75,7 @@ class OpenAIService {
     // Struct for individual choices within the response (usually just one for non-streaming)
     struct Choice: Codable {
         let index: Int
-        let message: ChatMessage // References OpenAIService.ChatMessage
+        let message: ChatMessage // References AIService.ChatMessage
         let finish_reason: String
     }
 
@@ -89,7 +89,7 @@ class OpenAIService {
     // Initialize the service, retrieving the API key from environment variables
     init() throws {
         guard let key = ProcessInfo.processInfo.environment["OPENAI_API_KEY"] else {
-            throw OpenAIServiceError.invalidAPIKey
+            throw AIServiceError.invalidAPIKey
         }
         self.apiKey = key
         let config = URLSessionConfiguration.default
@@ -100,7 +100,7 @@ class OpenAIService {
     // Asynchronously fetches a chat completion from the OpenAI API
     func getChatCompletion(messages: [ChatMessage], model: String = "gpt-4o-mini", temperature: Double? = 0.7, maxTokens: Int? = 150) async throws -> String {
         guard let url = URL(string: "https://api.openai.com/v1/chat/completions") else {
-            throw OpenAIServiceError.invalidURL
+            throw AIServiceError.invalidURL
         }
 
         var request = URLRequest(url: url)
@@ -120,15 +120,14 @@ class OpenAIService {
             let encoder = JSONEncoder()
             // Configure encoder to convert Swift `camelCase` to JSON `snake_case`
             encoder.keyEncodingStrategy = .convertToSnakeCase
-            request.httpBody = try encoder.encode(chatRequest)
         } catch {
-            throw OpenAIServiceError.decodingError(error)
+            throw AIServiceError.decodingError(error)
         }
 
         let (data, response) = try await session.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            throw OpenAIServiceError.noData // This should ideally be a more specific error for URLSession
+            throw AIServiceError.noData // This should ideally be a more specific error for URLSession
         }
 
         // Check for successful HTTP status codes (2xx range)
@@ -137,9 +136,9 @@ class OpenAIService {
             if let apiError = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any],
                let errorDict = apiError["error"] as? [String: Any],
                let errorMessage = errorDict["message"] as? String {
-                throw OpenAIServiceError.apiError(errorMessage)
+                throw AIServiceError.apiError(errorMessage)
             } else {
-                throw OpenAIServiceError.apiError("HTTP \(httpResponse.statusCode): Unknown API error.")
+                throw AIServiceError.apiError("HTTP \(httpResponse.statusCode): Unknown API error.")
             }
         }
 
@@ -150,11 +149,11 @@ class OpenAIService {
             let completionResponse = try decoder.decode(ChatCompletionResponse.self, from: data)
 
             guard let firstChoice = completionResponse.choices.first else {
-                throw OpenAIServiceError.noData // No AI response choice found
+                throw AIServiceError.noData // No AI response choice found
             }
             return firstChoice.message.content
         } catch {
-            throw OpenAIServiceError.decodingError(error)
+            throw AIServiceError.decodingError(error)
         }
     }
 }
