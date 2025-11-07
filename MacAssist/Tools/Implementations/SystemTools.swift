@@ -153,71 +153,123 @@ final class SystemTools {
   }
   
   func replaceAllText(with newContent: String) async -> Result<String, ToolExecutionError> {
-    let pasteboard = NSPasteboard.general
-    let originalContent = pasteboard.string(forType: .string)
+    // Perform "Select All" (Command-A)
+    let selectAllResult = await selectAllText()
     
-    defer {
-      pasteboard.clearContents()
-      if let originalContent = originalContent {
-        pasteboard.setString(originalContent, forType: .string)
-      }
+    switch selectAllResult {
+    case .success:
+        // Give the application a moment to process the selection
+        try? await Task.sleep(for: .milliseconds(500)) 
+        
+        // Then type the new content
+        let typeTextResult = await typeText(content: newContent)
+        
+        switch typeTextResult {
+        case .success:
+            return .success("Successfully replaced all text by typing the new content.")
+        case .failure(let error):
+            return .failure(error)
+        }
+    case .failure(let error):
+        return .failure(.unexpectedError("Failed to select all text before typing: \(error.localizedDescription)"))
     }
-    
-    pasteboard.clearContents()
-    pasteboard.setString(newContent, forType: .string)
-    
-    try? await Task.sleep(for: .milliseconds(100))
-    
-    let script = """
-    tell application "System Events"
-        keystroke "a" using command down
-        delay 0.2
-        keystroke "v" using command down
-    end tell
-    """
-    return await executeAppleScript(script)
   }
   
-  func getTextFromFrontmostApplication() async -> Result<String, ToolExecutionError> {
-    let pasteboard = NSPasteboard.general
-    let originalContent = pasteboard.string(forType: .string)
-    
-    defer {
-      pasteboard.clearContents()
-      if let originalContent = originalContent {
-        pasteboard.setString(originalContent, forType: .string)
+    func getTextFromFrontmostApplication() async -> Result<String, ToolExecutionError> {
+  
+      let pasteboard = NSPasteboard.general
+  
+      let originalContent = pasteboard.string(forType: .string)
+  
+      
+  
+      defer {
+  
+        pasteboard.clearContents()
+  
+        if let originalContent = originalContent {
+  
+          pasteboard.setString(originalContent, forType: .string)
+  
+        }
+  
       }
+  
+      
+  
+      pasteboard.clearContents()
+  
+      
+  
+      let script = """
+      tell application "System Events"
+          keystroke "a" using command down
+          delay 0.2
+          keystroke "c" using command down
+      end tell
+      """
+  
+      let copyResult = await executeAppleScript(script)
+  
+      
+  
+      guard case .success = copyResult else {
+  
+        return .failure(.shellCommandFailed("AppleScript (Select All & Copy)", -1, "Failed to execute the copy command. The frontmost application may not support it."))
+  
+      }
+  
+      
+  
+      try? await Task.sleep(for: .milliseconds(200))
+  
+      
+  
+      guard let copiedText = pasteboard.string(forType: .string), !copiedText.isEmpty else {
+  
+        return .failure(.unexpectedError("Could not retrieve text from the frontmost application. The clipboard was empty after copying."))
+  
+      }
+  
+      
+  
+      return .success(copiedText)
+  
     }
     
-    pasteboard.clearContents()
-    
-    let script = """
-    tell application "System Events"
-        keystroke "a" using command down
-        delay 0.2
-        keystroke "c" using command down
-    end tell
-    """
-    let copyResult = await executeAppleScript(script)
-    
-    guard case .success = copyResult else {
-      return .failure(.shellCommandFailed("AppleScript (Select All & Copy)", -1, "Failed to execute the copy command. The frontmost application may not support it."))
+    func getSelectedText() async -> Result<String, ToolExecutionError> {
+        let pasteboard = NSPasteboard.general
+        let originalContent = pasteboard.string(forType: .string)
+
+        defer {
+            pasteboard.clearContents()
+            if let originalContent = originalContent {
+                pasteboard.setString(originalContent, forType: .string)
+            }
+        }
+
+        pasteboard.clearContents()
+
+        let script = """
+        tell application "System Events"
+            keystroke "c" using command down
+        end tell
+        """
+        let copyResult = await executeAppleScript(script)
+
+        guard case .success = copyResult else {
+            return .failure(.shellCommandFailed("AppleScript (Copy)", -1, "Failed to execute the copy command."))
+        }
+
+        try? await Task.sleep(for: .milliseconds(200))
+
+        guard let copiedText = pasteboard.string(forType: .string) else {
+            return .success("")
+        }
+
+        return .success(copiedText)
     }
-    
-    try? await Task.sleep(for: .milliseconds(200))
-    
-    guard let copiedText = pasteboard.string(forType: .string), !copiedText.isEmpty else {
-      return .failure(.unexpectedError("Could not retrieve text from the frontmost application. The clipboard was empty after copying."))
-    }
-    
-    return .success(copiedText)
-  }
   
-    
-  
-    
-  
-   
   
       func getCurrentDateTime() -> Result<String, ToolExecutionError> {
   
@@ -361,4 +413,3 @@ final class SystemTools {
     return .success("Successfully opened the website: \(url)")
   }
 }
-

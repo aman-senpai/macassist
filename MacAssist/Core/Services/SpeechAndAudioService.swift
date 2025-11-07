@@ -6,10 +6,10 @@ import Combine
 class SpeechAndAudioService: NSObject, ObservableObject, SFSpeechRecognizerDelegate, AVSpeechSynthesizerDelegate {
 
     // MARK: - Published Properties
-    @Published var liveTranscript: String = "" // For displaying partial results in UI
+    @Published var liveTranscript: String = ""
     @Published var isRecording: Bool = false
     @Published var speechAuthorizationStatus: SFSpeechRecognizerAuthorizationStatus = .notDetermined
-    @Published var speechErrorMessage: String? // Optional error message for UI alerts
+    @Published var speechErrorMessage: String?
     
     // MARK: - Internal State
     private let speechRecognizer: SFSpeechRecognizer?
@@ -28,7 +28,7 @@ class SpeechAndAudioService: NSObject, ObservableObject, SFSpeechRecognizerDeleg
         self.speechRecognizer?.delegate = self
         self.speechSynthesizer.delegate = self
         
-        requestSpeechAuthorization() // Request permissions on initialization
+        requestSpeechAuthorization()
     }
     
     deinit {
@@ -38,22 +38,20 @@ class SpeechAndAudioService: NSObject, ObservableObject, SFSpeechRecognizerDeleg
         print("SpeechAndAudioService deinitialized.")
     }
     
-    // MARK: - Authorization
     
     func requestSpeechAuthorization() {
         SFSpeechRecognizer.requestAuthorization { authStatus in
-            DispatchQueue.main.async { // Ensure UI updates on main thread
+            DispatchQueue.main.async {
                 self.speechAuthorizationStatus = authStatus
                 switch authStatus {
                 case .authorized:
                     print("Speech recognition authorized.")
-                    // Also check microphone authorization as it's separate on macOS
                     AVCaptureDevice.requestAccess(for: .audio) { granted in
                         DispatchQueue.main.async {
                             if !granted {
                                 self.speechErrorMessage = "Microphone access denied. Please enable it in System Settings > Privacy & Security > Microphone for MacAssist."
                             } else {
-                                self.speechErrorMessage = nil // Clear any previous error
+                                self.speechErrorMessage = nil
                             }
                         }
                     }
@@ -91,7 +89,7 @@ class SpeechAndAudioService: NSObject, ObservableObject, SFSpeechRecognizerDeleg
             return
         }
         
-        cleanupRecognitionResources() // Ensure a clean slate before starting
+        cleanupRecognitionResources()
 
         do {
             let newAudioEngine = AVAudioEngine()
@@ -126,14 +124,12 @@ class SpeechAndAudioService: NSObject, ObservableObject, SFSpeechRecognizerDeleg
                     self.liveTranscript = result.bestTranscription.formattedString
                     isFinal = result.isFinal
                     
-                    // Reset the silence timer if new speech is recognized (even partial)
                     if !self.liveTranscript.isEmpty {
                         self.startSilenceTimer()
                     }
                 }
                 
                 if error != nil || isFinal {
-                    // This block runs when the task completes, whether by error, silence, or explicit endAudio()
                     let finalTranscript = self.liveTranscript.trimmingCharacters(in: .whitespacesAndNewlines)
 
                     self.cleanupRecognitionResources() // Clean up resources
@@ -145,17 +141,13 @@ class SpeechAndAudioService: NSObject, ObservableObject, SFSpeechRecognizerDeleg
                     } else if let error = error {
                         print("Speech Recognition Task Error: \(error.localizedDescription)")
                         let nsError = error as NSError
-                        // Error code 203 usually means "no speech detected" or "silent"
                         if !(nsError.domain == "com.apple.Speech.Recognition" && nsError.code == 203) {
                             self.speechErrorMessage = "Speech recognition error: \(error.localizedDescription)"
                         } else {
-                            // If it's a 203 error but we have a non-empty transcript, treat it as a final result.
-                            // This can happen if user spoke, then paused, then task finished due to silence.
                             if !finalTranscript.isEmpty {
                                 self.onFinalTranscript?(finalTranscript)
                             } else {
                                 print("No speech detected.")
-                                // self.speechErrorMessage = "No speech detected." // Optionally alert user
                             }
                         }
                     }
@@ -183,7 +175,6 @@ class SpeechAndAudioService: NSObject, ObservableObject, SFSpeechRecognizerDeleg
         isRecording = false
         liveTranscript = "" // Clear live transcript
         
-        // If user explicitly stops and there's a partial transcript, treat it as final
         if !currentFinalTranscript.isEmpty {
             onFinalTranscript?(currentFinalTranscript)
         }
@@ -198,7 +189,6 @@ class SpeechAndAudioService: NSObject, ObservableObject, SFSpeechRecognizerDeleg
         recognitionRequest = nil
         
         audioEngine?.stop()
-        // It's important to remove the tap from the input node to prevent memory leaks.
         audioEngine?.inputNode.removeTap(onBus: 0)
         audioEngine = nil
         
@@ -211,11 +201,9 @@ class SpeechAndAudioService: NSObject, ObservableObject, SFSpeechRecognizerDeleg
         silenceTimer?.invalidate()
         silenceTimer = nil
 
-        // Set a timeout, e.g., 2.0 seconds of silence, before ending the audio session.
         silenceTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
             guard let self = self else { return }
             print("Silence detected by timer, ending audio for recognition request.")
-            // This will trigger the recognitionTask's completion block with isFinal = true (or error)
             self.recognitionRequest?.endAudio()
             self.silenceTimer?.invalidate() // Invalidate immediately
             self.silenceTimer = nil
@@ -244,7 +232,6 @@ class SpeechAndAudioService: NSObject, ObservableObject, SFSpeechRecognizerDeleg
         }
     }
     
-    // MARK: - SFSpeechRecognizerDelegate
     
     func speechRecognizer(_ speechRecognizer: SFSpeechRecognizer, availabilityDidChange available: Bool) {
         DispatchQueue.main.async {
@@ -258,19 +245,15 @@ class SpeechAndAudioService: NSObject, ObservableObject, SFSpeechRecognizerDeleg
         }
     }
     
-    // MARK: - AVSpeechSynthesizerDelegate
     
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
-        // Optional: Implement if UI needs to react when speech starts
     }
     
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
-        // Optional: Implement if UI needs to react when speech finishes
         print("Finished speaking.")
     }
     
     func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
-        // Optional: Implement if UI needs to react when speech is cancelled
         print("Speech cancelled.")
     }
 }

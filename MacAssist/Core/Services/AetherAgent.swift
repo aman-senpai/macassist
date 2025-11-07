@@ -248,7 +248,7 @@ final class AetherAgent: ObservableObject {
                 parameters: ParameterSchema(properties: [:], required: []))),
             ToolSchema(function: FunctionDetails(
                 name: "summarizeText",
-                description: "Gets all text from the frontmost application, summarizes it, and replaces the original text with the summary. Use this when the user asks to summarize the current content.",
+                description: "Summarizes the selected text in the frontmost application. If no text is selected, it summarizes all the text. The summary then replaces the original text. Use this when the user asks to summarize the current content.",
                 parameters: ParameterSchema(properties: [:], required: []))),
             ToolSchema(function: FunctionDetails(
                 name: "selectAllText",
@@ -325,7 +325,8 @@ final class AetherAgent: ObservableObject {
             
             for _ in 0..<5 {
                 currentAgentStatus = .responding
-                let (responseMessage, completionError) = try await callOpenAI(with: conversationHistory)
+                // Call OpenAI with tools for general conversation
+                let (responseMessage, completionError) = try await callOpenAI(with: conversationHistory, includeTools: true)
                 
                 if let error = completionError {
                     addAssistantMessage(content: "API Error: \(error.localizedDescription)")
@@ -380,31 +381,49 @@ final class AetherAgent: ObservableObject {
     // MARK: - Tool Execution
     
     private func summarizeText() async -> Result<String, ToolExecutionError> {
-        let textResult = await systemTools.getTextFromFrontmostApplication()
-
-        let textToSummarize: String
-        switch textResult {
-        case .success(let text):
-            textToSummarize = text
-        case .failure(let error):
-            return .failure(error)
+        var textToSummarize: String?
+        
+        // Try to get selected text first
+        let selectedTextResult = await systemTools.getSelectedText()
+        if case .success(let selectedText) = selectedTextResult, !selectedText.isEmpty {
+            textToSummarize = selectedText
+        } else {
+            // If selected text is empty or there was an error, get all text
+            if case .failure(let error) = selectedTextResult {
+                print("Could not get selected text: \(error.localizedDescription). Falling back to all text.")
+            }
+            
+            let allTextResult = await systemTools.getTextFromFrontmostApplication()
+            switch allTextResult {
+            case .success(let allText):
+                textToSummarize = allText
+            case .failure(let error):
+                return .failure(error) // If getting all text fails, we can't proceed
+            }
         }
-
-        guard !textToSummarize.isEmpty else {
+        
+        guard let finalTextToSummarize = textToSummarize, !finalTextToSummarize.isEmpty else {
             return .failure(.summarizationFailed("The document is empty, nothing to summarize."))
         }
 
-        let summaryPrompt = "Please summarize the following text concisely: \(textToSummarize)"
+        let summaryPrompt = "Please summarize the following text concisely: \(finalTextToSummarize)"
+        print(summaryPrompt)
         let promptMessage = ChatMessage(role: "user", content: summaryPrompt)
         
         do {
-            let (response, error) = try await callOpenAI(with: [systemPrompt, promptMessage])
+            // IMPORTANT CHANGE: Call OpenAI *without* tools for summarization
+            let (response, error) = try await callOpenAI(with: [systemPrompt, promptMessage], includeTools: false)
             
             if let error = error {
                 return .failure(.summarizationFailed("API call failed: \(error.localizedDescription)"))
             }
             
+            // This is the crucial guard. If response.content is nil, it means the AI tried to call a tool instead.
             guard let summary = response?.content, !summary.isEmpty else {
+                // If the response was empty but there were tool calls, we should report that.
+                if let toolCalls = response?.toolCalls, !toolCalls.isEmpty {
+                    return .failure(.summarizationFailed("AI attempted to call a tool for summarization: \(toolCalls.first?.function.name ?? "unknown tool"). This should not happen when tools are disabled for summarization."))
+                }
                 return .failure(.summarizationFailed("Summarization failed or returned an empty result."))
             }
             
@@ -525,7 +544,7 @@ final class AetherAgent: ObservableObject {
     
     // MARK: - OpenAI Network Call
 
-    private func callOpenAI(with messages: [ChatMessage]) async throws -> (ChatMessage?, Error?) {
+    private func callOpenAI(with messages: [ChatMessage], includeTools: Bool) async throws -> (ChatMessage?, Error?) { // MODIFIED: Added includeTools parameter
         let apiKey = UserDefaults.standard.string(forKey: "openAIApiKey") ?? ""
 
         let url = URL(string: "https://api.openai.com/v1/chat/completions")!
@@ -555,12 +574,16 @@ final class AetherAgent: ObservableObject {
             return dict
         }
         
-        let apiPayload: [String: Any] = [
+        var apiPayload: [String: Any] = [
             "model": modelName,
-            "messages": apiMessages,
-            "tools": try toolSchemas.map { try encoder.encode($0) }
-                .compactMap { try JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            "messages": apiMessages
         ]
+        
+        // MODIFIED: Only include tools if `includeTools` is true
+        if includeTools {
+            apiPayload["tools"] = try toolSchemas.map { try encoder.encode($0) }
+                .compactMap { try JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+        }
         
         request.httpBody = try JSONSerialization.data(withJSONObject: apiPayload, options: [])
 
@@ -569,7 +592,6 @@ final class AetherAgent: ObservableObject {
         #if DEBUG
         if let httpResponse = response as? HTTPURLResponse {
             print("[AetherAgent] Status code: \(httpResponse.statusCode)")
-            print("[AetherAgent] Headers: \(httpResponse.allHeaderFields)")
         }
         print("[AetherAgent] Returned data length: \(data.count)")
         if data.count < 1000 {

@@ -11,13 +11,11 @@ import Speech
 import AVFoundation
 
 struct ContentView: View {
-    // The controller is now the source of truth, passed from the environment.
     @EnvironmentObject var controller: VoiceAssistantController
     
     @State private var selectedTab: Int = 0
     @AppStorage("openAIApiKey") private var openAIApiKey: String = ""
     
-    // Computed property to determine if the assistant is actively listening or processing.
     private var isAssistantActive: Bool {
         controller.isRecording || controller.agent.isProcessing
     }
@@ -25,14 +23,12 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             TabView(selection: $selectedTab) {
-                // MARK: Chat View
                 chatView
                     .tag(0)
                     .tabItem {
                         Label("Chat", systemImage: "message.fill")
                     }
                 
-                // MARK: Settings View
                 settingsView
                     .tag(1)
                     .tabItem {
@@ -43,7 +39,7 @@ struct ContentView: View {
         }
         .padding(0)
         .onAppear {
-            controller.requestSpeechAuthorization() // Request permissions on appear
+            controller.requestSpeechAuthorization()
         }
         .alert("Speech Recognition Error", isPresented: $controller.showingSpeechErrorAlert, actions: {
             Button("OK") { controller.showingSpeechErrorAlert = false }
@@ -52,7 +48,6 @@ struct ContentView: View {
         })
     }
 
-    // MARK: - Chat View Body
     private var chatView: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
@@ -78,7 +73,6 @@ struct ContentView: View {
         .padding(.top, 6)
     }
 
-    // MARK: - Input Bar Body
     private var inputBar: some View {
         HStack(alignment: .bottom, spacing: 8) {
             TextField("Ask Aether...", text: $controller.currentInput, axis: .vertical)
@@ -88,7 +82,6 @@ struct ContentView: View {
                 .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.background))
                 .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Color.primary.opacity(0.1), lineWidth: 1))
                 .lineLimit(1...5)
-                // Add a Siri-like glow effect when the assistant is active
                 .shadow(color: isAssistantActive ? .accentColor.opacity(0.6) : .clear, radius: 4)
                 .shadow(color: isAssistantActive ? .accentColor.opacity(0.4) : .clear, radius: 8)
                 .animation(.easeInOut(duration: 0.5), value: isAssistantActive)
@@ -123,7 +116,6 @@ struct ContentView: View {
         .padding(.vertical, 8)
     }
     
-    // MARK: - Message Row
     @ViewBuilder
     private func messageRow(for message: ChatMessage) -> some View {
         VStack(alignment: message.role == "user" ? .trailing : .leading, spacing: 6) {
@@ -160,7 +152,6 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - Settings View Body
     private var settingsView: some View {
         VStack(alignment: .center, spacing: 24) {
             VStack(alignment: .center, spacing: 6) {
@@ -187,7 +178,6 @@ struct ContentView: View {
     }
 }
 
-// MARK: - Preview
 #Preview {
     ContentView()
         .environmentObject(VoiceAssistantController())
