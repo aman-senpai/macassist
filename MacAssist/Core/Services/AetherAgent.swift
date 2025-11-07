@@ -8,24 +8,21 @@
 import Foundation
 import SwiftUI
 import Combine
-import AppKit // Required for NSWorkspace (opening apps) and NSAppleScript (system actions)
-
-// MARK: - 1. Data Models for OpenAI API
+import AppKit
 
 struct ChatMessage: Identifiable, Codable {
     var id: UUID?
-    let role: String // "user", "assistant", "system", "tool"
+    let role: String
     var content: String?
     var toolCalls: [ToolCall]?
-    var toolCallId: String? // For role: "tool"
-    var name: String? // For role: "tool"
+    var toolCallId: String?
+    var name: String?
     var refusal: String?
     var annotations: [Annotation]?
     var timestamp: Date
 
     var safeId: UUID { id ?? UUID() }
 
-    // Custom initializer to provide a default timestamp for internal message creation
     init(id: UUID? = nil, role: String, content: String?, toolCalls: [ToolCall]? = nil, toolCallId: String? = nil, name: String? = nil, refusal: String? = nil, annotations: [Annotation]? = nil, timestamp: Date = Date()) {
         self.id = id
         self.role = role
@@ -38,7 +35,6 @@ struct ChatMessage: Identifiable, Codable {
         self.timestamp = timestamp
     }
 
-    // MARK: - Codable Implementation
     enum CodingKeys: String, CodingKey {
         case id
         case role
@@ -51,7 +47,6 @@ struct ChatMessage: Identifiable, Codable {
         case timestamp
     }
 
-    // Custom Decodable initializer for parsing JSON (e.g., from OpenAI API)
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
@@ -67,7 +62,6 @@ struct ChatMessage: Identifiable, Codable {
         self.timestamp = try container.decodeIfPresent(Date.self, forKey: .timestamp) ?? Date()
     }
 
-    // Custom Encodable implementation
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encodeIfPresent(id, forKey: .id)
@@ -92,7 +86,7 @@ struct ToolCall: Codable {
 
 struct FunctionCall: Codable {
     let name: String
-    let arguments: String // JSON string
+    let arguments: String
 }
 
 struct ToolSchema: Codable {
@@ -117,7 +111,6 @@ struct PropertyDetails: Codable {
     let description: String
 }
 
-// MARK: - Assistant Status Definition (NEW)
 enum AssistantStatus: Equatable {
     case idle
     case thinking
@@ -136,8 +129,6 @@ enum AssistantStatus: Equatable {
     }
 }
 
-// MARK: - 3. Aether Agent Class (AI and Tool Management)
-
 @MainActor
 final class AetherAgent: ObservableObject {
     @Published var messages: [ChatMessage] = []
@@ -145,10 +136,8 @@ final class AetherAgent: ObservableObject {
     @Published var spokenResponse: String?
     @Published var currentAgentStatus: AssistantStatus = .idle // NEW: Agent's internal status
     
-    // NEW: Instance of the modularized SystemTools
     private let systemTools = SystemTools()
     
-    // System Prompt for Aether
     private let systemPrompt = ChatMessage(id: UUID(), role: "system", content: """
         You are 'Aether', an expert conversational AI assistant for macOS.
         Your primary goal is to be helpful, concise, and conversational.
@@ -168,25 +157,16 @@ final class AetherAgent: ObservableObject {
     private let modelName = "gpt-4o-mini"
     private var history: [ChatMessage] = []
     
-    // MARK: - Initialization
     
     init() {
-        // On first launch, check and request necessary system permissions.
         AetherAgent.checkAndRequestPermissions()
         
         history.append(systemPrompt)
         messages.append(ChatMessage(id: UUID(), role: "assistant", content: "Hello! I'm Aether, your macOS assistant. Enter your OpenAI API key in the Settings tab to get started."))
-        currentAgentStatus = .idle // Set initial status
+        currentAgentStatus = .idle
     }
-    
-    // MARK: - Permissions Management
-    
+        
     private static func checkAndRequestPermissions() {
-        // --- Accessibility Permission ---
-        // This is required for controlling other applications via AppleScript.
-        // The user will be prompted for permission if the app is not trusted.
-        // This prompt only appears once. If they deny it, they must manually
-        // grant permission in System Settings > Privacy & Security > Accessibility.
         let accessibilityOptions: NSDictionary = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true]
         if AXIsProcessTrustedWithOptions(accessibilityOptions) {
             print("[AetherAgent] Accessibility access has been granted.")
@@ -194,25 +174,15 @@ final class AetherAgent: ObservableObject {
             print("[AetherAgent] Accessibility access not granted. The system should prompt the user.")
         }
         
-        // --- Screen Recording Permission ---
-        // Permission for screen recording is required for taking screenshots.
-        // The `screencapture` command-line tool will trigger the system prompt
-        // automatically the first time the user tries to take a screenshot.
-        // No special code is needed here to trigger it, but you MUST provide
-        // the `NSScreenCaptureUsageDescription` key in Info.plist.
     }
-    
-    // MARK: - Tool Schemas
     
     private var toolSchemas: [ToolSchema] {
         return [
-            // --- NEW SYSTEM INFORMATION TOOL ---
             ToolSchema(function: FunctionDetails(
                 name: "getCurrentDateTime",
                 description: "Retrieves the current system date, time, and timezone. Use this when the user asks 'what time is it?' or 'what is the date?'",
                 parameters: ParameterSchema(properties: [:], required: []))),
 
-            // --- SEARCH/WEB TOOLS ---
             ToolSchema(function: FunctionDetails(
                 name: "googleSearch",
                 description: "Opens the default web browser and performs a general search query using Google. Use this for general knowledge, news, or fact-finding queries.",
@@ -235,7 +205,6 @@ final class AetherAgent: ObservableObject {
                     required: ["query"]
                 ))),
             
-            // --- APPLICATION CONTROL TOOLS ---
             ToolSchema(function: FunctionDetails(
                 name: "openApplication",
                 description: "Opens a specified macOS application (e.g., 'open Mail', 'launch Terminal'). Takes the exact application name as input.",
@@ -252,7 +221,6 @@ final class AetherAgent: ObservableObject {
                 description: "Minimizes the window of the application that is currently active on the screen.",
                 parameters: ParameterSchema(properties: [:], required: []))),
 
-            // --- WRITING & TEXT MANIPULATION TOOLS ---
             ToolSchema(function: FunctionDetails(
                 name: "typeText",
                 description: "Types the given text at the current cursor location by simulating keystrokes. Use this for writing messages, emails, or any text directly into an active text field.",
@@ -291,7 +259,6 @@ final class AetherAgent: ObservableObject {
                 description: "Copies the currently selected text to the clipboard (simulates Command-C).",
                 parameters: ParameterSchema(properties: [:], required: []))),
             
-            // --- SYSTEM UTILITY TOOLS ---
             ToolSchema(function: FunctionDetails(
                 name: "runShellCommand",
                 description: "Executes an arbitrary command in the macOS shell (e.g., 'ls -l', 'date'). Use this for advanced system tasks not covered by other specific tools.",
@@ -325,55 +292,50 @@ final class AetherAgent: ObservableObject {
         ]
     }
     
-    // MARK: - Public API
     
     func sendMessage(text: String) {
-        guard !isProcessing else { return } // If already processing, ignore new message
-
+        guard !isProcessing else { return }
+        
         let userMessage = ChatMessage(id: UUID(), role: "user", content: text)
         messages.append(userMessage)
         history.append(userMessage)
         
         Task {
             isProcessing = true
-            currentAgentStatus = .thinking // Agent starts thinking after receiving a message
+            currentAgentStatus = .thinking
             await processResponse()
             isProcessing = false
-            // After processing, if no error, the agent should return to idle
-            // unless speech service is still active. This is handled by VoiceAssistantController.
-            if case .thinking = currentAgentStatus { // Only if status wasn't changed to error or tool call
+            if case .thinking = currentAgentStatus {
                 currentAgentStatus = .idle
             }
         }
     }
     
-    // MARK: - Core Processing Loop
     
     private func processResponse() async {
         let apiKey = UserDefaults.standard.string(forKey: "openAIApiKey") ?? ""
         guard !apiKey.isEmpty else {
             addAssistantMessage(content: "Please enter a valid OpenAI API Key in the Settings tab.")
-            currentAgentStatus = .error("API Key Missing") // Update status
+            currentAgentStatus = .error("API Key Missing")
             return
         }
 
         do {
             var conversationHistory = history
             
-            for _ in 0..<5 { // Limit the number of turns to prevent infinite loops (AI response -> tool call -> tool result -> AI response etc.)
-                
-                currentAgentStatus = .responding // AI is generating a text response from OpenAI
+            for _ in 0..<5 {
+                currentAgentStatus = .responding
                 let (responseMessage, completionError) = try await callOpenAI(with: conversationHistory)
                 
                 if let error = completionError {
                     addAssistantMessage(content: "API Error: \(error.localizedDescription)")
-                    currentAgentStatus = .error("API Error") // Update status
+                    currentAgentStatus = .error("API Error")
                     return
                 }
                 
                 guard let response = responseMessage else {
                     addAssistantMessage(content: "Received an empty response from the AI.")
-                    currentAgentStatus = .error("Empty AI Response") // Update status
+                    currentAgentStatus = .error("Empty AI Response")
                     return
                 }
 
@@ -416,6 +378,48 @@ final class AetherAgent: ObservableObject {
     }
 
     // MARK: - Tool Execution
+    
+    private func summarizeText() async -> Result<String, ToolExecutionError> {
+        let textResult = await systemTools.getTextFromFrontmostApplication()
+
+        let textToSummarize: String
+        switch textResult {
+        case .success(let text):
+            textToSummarize = text
+        case .failure(let error):
+            return .failure(error)
+        }
+
+        guard !textToSummarize.isEmpty else {
+            return .failure(.summarizationFailed("The document is empty, nothing to summarize."))
+        }
+
+        let summaryPrompt = "Please summarize the following text concisely: \(textToSummarize)"
+        let promptMessage = ChatMessage(role: "user", content: summaryPrompt)
+        
+        do {
+            let (response, error) = try await callOpenAI(with: [systemPrompt, promptMessage])
+            
+            if let error = error {
+                return .failure(.summarizationFailed("API call failed: \(error.localizedDescription)"))
+            }
+            
+            guard let summary = response?.content, !summary.isEmpty else {
+                return .failure(.summarizationFailed("Summarization failed or returned an empty result."))
+            }
+            
+            let replaceResult = await systemTools.replaceAllText(with: summary)
+            
+            switch replaceResult {
+            case .success:
+                return .success("Successfully summarized and replaced the text.")
+            case .failure(let error):
+                return .failure(error)
+            }
+        } catch {
+            return .failure(.summarizationFailed("An unexpected error occurred during summarization: \(error.localizedDescription)"))
+        }
+    }
 
     private func executeTool(toolCall: ToolCall) async -> ChatMessage {
         let functionName = toolCall.function.name
@@ -475,7 +479,7 @@ final class AetherAgent: ObservableObject {
                 finalResult = await systemTools.getTextFromFrontmostApplication()
             
             case "summarizeText":
-                finalResult = await systemTools.summarizeText()
+                finalResult = await summarizeText()
             
             case "selectAllText":
                 finalResult = await systemTools.selectAllText()

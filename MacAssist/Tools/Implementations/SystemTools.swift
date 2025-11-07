@@ -7,9 +7,8 @@
 
 import Foundation
 import AppKit
-import UniformTypeIdentifiers // This import is not directly used in the provided SystemTools code, but is harmless.
+import UniformTypeIdentifiers
 
-// MARK: - Error Handling
 
 enum ToolExecutionError: Error, LocalizedError {
   case missingArgument(String)
@@ -17,6 +16,7 @@ enum ToolExecutionError: Error, LocalizedError {
   case fileOperationFailed(String)
   case shellCommandFailed(String, Int, String)
   case unexpectedError(String)
+  case summarizationFailed(String)
 
   var errorDescription: String? {
     switch self {
@@ -26,15 +26,14 @@ enum ToolExecutionError: Error, LocalizedError {
     case .shellCommandFailed(let command, let exitCode, let output):
       return "Command '\(command)' failed with exit code \(exitCode). Output: \(output.isEmpty ? "No error output." : output)"
     case .unexpectedError(let message): return "An unexpected error occurred: \(message)"
+    case .summarizationFailed(let message): return "Summarization failed: \(message)"
     }
   }
 }
 
-// MARK: - Tool Implementation
 
 final class SystemTools {
 
-  /// Helper to execute AppleScript commands via Process
   private func executeAppleScript(_ script: String) async -> Result<String, ToolExecutionError> {
     return await withCheckedContinuation { continuation in
       let task = Process()
@@ -64,7 +63,6 @@ final class SystemTools {
     }
   }
  
-  // --- Application Control Tools ---
 
   func openApplication(name: String) -> Result<String, ToolExecutionError> {
     let appPath = "/Applications/\(name).app"
@@ -97,7 +95,6 @@ final class SystemTools {
     return await executeAppleScript(script)
   }
 
-  // --- Writing & Text Manipulation Tools ---
   
   /// Simulates a "Select All" command (Command-A) in the frontmost application.
   func selectAllText() async -> Result<String, ToolExecutionError> {
@@ -105,14 +102,11 @@ final class SystemTools {
     return await executeAppleScript(script)
   }
   
-  /// Simulates a "Copy" command (Command-C) in the frontmost application.
   func copySelection() async -> Result<String, ToolExecutionError> {
     let script = "tell application \"System Events\" to keystroke \"c\" using command down"
     return await executeAppleScript(script)
   }
   
-  /// Pastes the given text at the current cursor location in the frontmost application.
-  /// This method is very fast but relies on clipboard access.
   func pasteText(content: String) async -> Result<String, ToolExecutionError> {
     let pasteboard = NSPasteboard.general
     pasteboard.clearContents()
@@ -127,28 +121,42 @@ final class SystemTools {
   
   /// Types the given text at the current cursor location by simulating keystrokes.
   /// This is useful for applications that might not respond well to the standard paste command.
-  /// It handles multi-line text with proper formatting.
+  /// It handles multi-line text with proper formatting, using Shift-Return for newlines.
   func typeText(content: String) async -> Result<String, ToolExecutionError> {
     // Escape characters for AppleScript string literals.
     // Backslashes and double quotes have special meaning and must be escaped.
-    // Newlines (`\n`) are converted to carriage returns (`\r`), which `keystroke` interprets as pressing the Return key.
-    let escapedContent = content
+    // Newlines (`\n`) are handled by simulating a "Shift-Return" keystroke.
+    let escapedForAppleScript = content
         .replacingOccurrences(of: "\\", with: "\\\\")
         .replacingOccurrences(of: "\"", with: "\\\"")
-        .replacingOccurrences(of: "\n", with: "\r")
+
+    let lines = escapedForAppleScript.components(separatedBy: "\n")
     
-    let script = "tell application \"System Events\" to keystroke \"\(escapedContent)\""
+    var commands: [String] = []
+    for (index, line) in lines.enumerated() {
+        if !line.isEmpty {
+            commands.append("keystroke \"\(line)\"")
+        }
+        
+        if index < lines.count - 1 {
+            commands.append("keystroke return using {shift down}")
+        }
+    }
+    
+    let script = """
+    tell application "System Events"
+        \(commands.joined(separator: "\n        "))
+    end tell
+    """
+    
     return await executeAppleScript(script)
   }
   
-  /// Replaces all text in the current context of the frontmost application with new content.
-  /// It preserves the user's original clipboard content.
   func replaceAllText(with newContent: String) async -> Result<String, ToolExecutionError> {
     let pasteboard = NSPasteboard.general
     let originalContent = pasteboard.string(forType: .string)
     
     defer {
-      // Restore original clipboard content
       pasteboard.clearContents()
       if let originalContent = originalContent {
         pasteboard.setString(originalContent, forType: .string)
@@ -170,14 +178,11 @@ final class SystemTools {
     return await executeAppleScript(script)
   }
   
-  /// Gets all selectable text from the frontmost application by copying it to the clipboard.
-  /// It preserves the user's original clipboard content.
   func getTextFromFrontmostApplication() async -> Result<String, ToolExecutionError> {
     let pasteboard = NSPasteboard.general
     let originalContent = pasteboard.string(forType: .string)
     
     defer {
-      // Restore original clipboard content after the operation.
       pasteboard.clearContents()
       if let originalContent = originalContent {
         pasteboard.setString(originalContent, forType: .string)
@@ -208,68 +213,38 @@ final class SystemTools {
     return .success(copiedText)
   }
   
-  /// Summarizes text from the frontmost application and replaces it with the summary.
-  /// **NOTE:** This is a placeholder for a real summarization engine.
-  /// A production implementation would use a sophisticated NLP model or a third-party API.
-  func summarizeText() async -> Result<String, ToolExecutionError> {
-    // 1. Get text from the frontmost application
-    let textResult = await getTextFromFrontmostApplication()
+    
+  
+    
+  
+   
+  
+      func getCurrentDateTime() -> Result<String, ToolExecutionError> {
+  
+          let date = Date()
+  
+          let formatter = DateFormatter()
+  
+          
+  
+          formatter.dateStyle = .full
+  
+          formatter.timeStyle = .long
+  
+          
+  
+          let dateTimeString = formatter.string(from: date)
+  
+          return .success(dateTimeString)
+  
+      }
 
-    let textToSummarize: String
-    switch textResult {
-    case .success(let text):
-        textToSummarize = text
-    case .failure(let error):
-        return .failure(error)
-    }
-
-    // 2. Summarize the text (using placeholder logic)
-    let sentences = textToSummarize.components(separatedBy: CharacterSet(charactersIn: ".!?"))
-        .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-
-    guard sentences.count > 1 else {
-        return .success("Not enough text to summarize. No changes were made.")
-    }
-
-    let firstSentence = sentences.first!.trimmingCharacters(in: .whitespacesAndNewlines)
-    let lastSentence = sentences.last!.trimmingCharacters(in: .whitespacesAndNewlines)
-
-    let summary = "\(firstSentence). [...] \(lastSentence)."
-
-    // 3. Replace the original text with the summary
-    let replaceResult = await replaceAllText(with: summary)
-
-    switch replaceResult {
-    case .success:
-        return .success("Successfully summarized and replaced the text.")
-    case .failure(let error):
-        return .failure(error)
-    }
-  }
-
-  // --- System Utility Tools ---
- 
-    /// **NEW:** Retrieves the current system date, time, and timezone.
-    func getCurrentDateTime() -> Result<String, ToolExecutionError> {
-        let date = Date()
-        let formatter = DateFormatter()
-        
-        // Use full styles to capture all necessary information (date, time, and timezone)
-        formatter.dateStyle = .full
-        formatter.timeStyle = .long
-        
-        let dateTimeString = formatter.string(from: date)
-        return .success(dateTimeString)
-    }
-
-  /// Executes an arbitrary shell command using Process.
   func runShellCommand(command: String) async -> Result<String, ToolExecutionError> {
     return await withCheckedContinuation { continuation in
       continuation.resume(returning: runShellCommandSync(command: command))
     }
   }
  
-  // Synchronous helper for shell command execution
   private func runShellCommandSync(command: String) -> Result<String, ToolExecutionError> {
     let task = Process()
     task.executableURL = URL(fileURLWithPath: "/bin/bash")
@@ -296,11 +271,9 @@ final class SystemTools {
     }
   }
  
-  /// Captures the entire screen and saves the image to the clipboard.
   func takeScreenshot() async -> Result<String, ToolExecutionError> {
     return await withCheckedContinuation { continuation in
       let task = Process()
-      // Use the explicit path to the screencapture binary for reliability
       task.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
      
       // Arguments:
@@ -344,7 +317,6 @@ final class SystemTools {
     let expandedPath = (path as NSString).expandingTildeInPath
     let url = URL(fileURLWithPath: expandedPath)
    
-    // Ensure directory exists
     let directoryURL = url.deletingLastPathComponent()
     do {
       try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
