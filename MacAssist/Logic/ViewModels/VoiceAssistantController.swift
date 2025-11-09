@@ -14,7 +14,7 @@ import AVFoundation
 @MainActor
 final class VoiceAssistantController: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     // MARK: - Published Properties for UI
-    @Published var agent = AetherAgent()
+    @Published var agent: AetherAgent // Removed default AetherAgent() initializer
     @Published var currentInput: String = ""
     @Published var isRecording: Bool = false
     @Published var isContinuousConversationActive: Bool = false
@@ -36,14 +36,15 @@ final class VoiceAssistantController: NSObject, ObservableObject, AVSpeechSynthe
     private var cancellables = Set<AnyCancellable>()
     
     // MARK: - Initialization
-    override init() {
+    init(historyManager: HistoryManager) {
+        self.agent = AetherAgent(historyManager: historyManager)
         super.init()
         speechSynthesizer.delegate = self
         
         // Observe agent's spoken response to trigger text-to-speech
         agent.$messages
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] messages in
+            .sink { [weak self] (messages: [ChatMessage]) in // Added explicit type annotation: [ChatMessage]
                 guard let self = self, let lastMessage = messages.last, lastMessage.role == "assistant" else {
                     return
                 }
@@ -243,3 +244,4 @@ final class VoiceAssistantController: NSObject, ObservableObject, AVSpeechSynthe
             silenceTimer = nil
         }
     }
+

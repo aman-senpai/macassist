@@ -10,16 +10,29 @@ import SwiftUI
 @main
 struct MacAssistApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    // Removed @StateObject private var historyManager = HistoryManager()
+    @Environment(\.scenePhase) private var scenePhase
     
     private var voiceAssistantController: VoiceAssistantController {
         appDelegate.voiceAssistantController
+    }
+
+    // Access the shared HistoryManager instance from the AppDelegate
+    private var historyManager: HistoryManager {
+        appDelegate.sharedHistoryManager
     }
 
     var body: some Scene {
         Window("MacAssist", id: "main") {
             ContentView()
                 .environmentObject(voiceAssistantController) // Pass controller to the view
+                .environmentObject(historyManager) // Use the shared instance
                 .frame(minWidth: 380, idealWidth: 450, maxWidth: 600, minHeight: 400, idealHeight: 500, maxHeight: 800)
+        }
+        .onChange(of: scenePhase) {
+            if scenePhase == .inactive {
+                historyManager.saveCurrentSessionHistory()
+            }
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
@@ -62,3 +75,4 @@ struct MenuBarContentView: View {
         .keyboardShortcut("q")
     }
 }
+

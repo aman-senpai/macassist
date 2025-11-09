@@ -122,9 +122,12 @@ class ConversationManager: NSObject, ObservableObject, SFSpeechRecognizerDelegat
     """
 
 
+    private let historyManager: HistoryManager
+
     // MARK: - Initialization
 
-    override init() {
+    init(historyManager: HistoryManager) {
+        self.historyManager = historyManager
         // Initialize speech recognizer for English (US). You can change the locale.
         speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
         super.init()
@@ -505,12 +508,24 @@ class ConversationManager: NSObject, ObservableObject, SFSpeechRecognizerDelegat
         }
     }
 
+    // REMOVED: Duplicate declaration of historyManager
+    // private let historyManager = HistoryManager()
+
     // MARK: - Lifecycle / Reset
 
     /// Resets the conversation manager to its initial idle state, stopping all active processes.
     func reset() {
         stopListening() // This will clear all recognition-related resources.
         speechSynthesizer.stopSpeaking(at: .immediate) // Stop any ongoing AI speech
+        
+        // Save the conversation to history before clearing it
+        let filteredMessages = conversationMessages.filter { $0.role != .system }
+        if !filteredMessages.isEmpty {
+            let messages = filteredMessages.map { Message(id: UUID(), content: $0.content ?? "", role: $0.role.rawValue, timestamp: Date()) }
+            let conversation = Conversation(id: UUID(), messages: messages, timestamp: Date())
+            historyManager.saveConversation(conversation)
+        }
+        
         state = .idle
         userTranscript = ""
         aiResponse = ""

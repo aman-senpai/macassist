@@ -2,19 +2,19 @@
 import SwiftUI
 
 struct MessageBubbleView: View {
-    let message: ChatModel
+    let message: ChatMessage
     
     var body: some View {
         HStack {
-            if message.sender == "user" {
+            if message.role == "user" {
                 Spacer()
-                Text(message.content)
+                Text(message.content ?? "No message")
                     .padding()
                     .background(Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(10)
             } else {
-                Text(message.content)
+                Text(message.content ?? "No message")
                     .padding()
                     .background(Color.gray)
                     .foregroundColor(.white)

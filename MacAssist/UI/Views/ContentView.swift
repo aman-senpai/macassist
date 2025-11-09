@@ -12,6 +12,7 @@ import AVFoundation
 
 struct ContentView: View {
     @EnvironmentObject var controller: VoiceAssistantController
+    @EnvironmentObject var historyManager: HistoryManager
     
     @State private var selectedTab: Int = 0
     @AppStorage("openAIApiKey") private var openAIApiKey: String = ""
@@ -29,8 +30,14 @@ struct ContentView: View {
                         Label("Chat", systemImage: "message.fill")
                     }
                 
-                settingsView
+                HistoryView()
                     .tag(1)
+                    .tabItem {
+                        Label("History", systemImage: "clock.fill")
+                    }
+                
+                settingsView
+                    .tag(2)
                     .tabItem {
                         Label("Settings", systemImage: "gearshape.fill")
                     }
@@ -179,6 +186,8 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
-        .environmentObject(VoiceAssistantController())
+    let historyManager = HistoryManager()
+    return ContentView()
+        .environmentObject(VoiceAssistantController(historyManager: historyManager))
+        .environmentObject(historyManager)
 }
