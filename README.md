@@ -276,15 +276,3 @@ By using this project, you agree to the following terms of use:
 *   [Contributing](CONTRIBUTING.md)
 *   [Code of Conduct](CODE_OF_CONDUCT.md)
 *   [License](LICENSE)
-
-## Disclaimer
-
-This project is provided "as is" and without any warranty. Use at your own risk.
-
-## Copyright
-
-Copyright (c) 2025 aman-senpai. All rights reserved.
-
-## Trademarks
-
-All trademarks are the property of their respective owners.
