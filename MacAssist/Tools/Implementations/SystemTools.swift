@@ -412,4 +412,81 @@ final class SystemTools {
     NSWorkspace.shared.open(urlObject)
     return .success("Successfully opened the website: \(url)")
   }
+  
+  // MARK: - File Management Tools
+  
+  func openPath(path: String) -> Result<String, ToolExecutionError> {
+      let expandedPath = (path as NSString).expandingTildeInPath
+      let url = URL(fileURLWithPath: expandedPath)
+      
+      var isDirectory: ObjCBool = false
+      guard FileManager.default.fileExists(atPath: expandedPath, isDirectory: &isDirectory) else {
+          return .failure(.fileOperationFailed("The path does not exist: \(path)"))
+      }
+      
+      let success = NSWorkspace.shared.open(url)
+      if success {
+          let type = isDirectory.boolValue ? "folder" : "file"
+          return .success("Successfully opened the \(type) at: \(path)")
+      } else {
+          // Fallback to 'open' command
+          let result = runShellCommandSync(command: "open \"\(expandedPath)\"")
+          switch result {
+          case .success:
+              return .success("Successfully opened path via shell: \(path)")
+          case .failure(let error):
+              return .failure(.fileOperationFailed("Failed to open path: \(error.localizedDescription)"))
+          }
+      }
+  }
+  
+  func searchFiles(query: String, searchScope: String? = nil) -> Result<String, ToolExecutionError> {
+      var command = "mdfind -name \"\(query)\""
+      
+      if let scope = searchScope, !scope.isEmpty {
+          let expandedScope = (scope as NSString).expandingTildeInPath
+          command += " -onlyin \"\(expandedScope)\""
+      }
+      
+      // Limit results to top 10 to avoid overwhelming the context
+      command += " | head -n 10"
+      
+      let result = runShellCommandSync(command: command)
+      
+      switch result {
+      case .success(let output):
+          if output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+              return .success("No files found matching '\(query)'" + (searchScope != nil ? " in \(searchScope!)." : "."))
+          }
+          return .success("Found the following files:\n\(output)")
+      case .failure(let error):
+          return .failure(.unexpectedError("Search failed: \(error.localizedDescription)"))
+      }
+  }
+  
+  func listDirectory(path: String) -> Result<String, ToolExecutionError> {
+      let expandedPath = (path as NSString).expandingTildeInPath
+      let url = URL(fileURLWithPath: expandedPath)
+      
+      var isDirectory: ObjCBool = false
+      guard FileManager.default.fileExists(atPath: expandedPath, isDirectory: &isDirectory) else {
+          return .failure(.fileOperationFailed("The path does not exist: \(path)"))
+      }
+      
+      guard isDirectory.boolValue else {
+          return .failure(.invalidArgument("The path is not a directory: \(path)"))
+      }
+      
+      do {
+          let contents = try FileManager.default.contentsOfDirectory(atPath: expandedPath)
+          if contents.isEmpty {
+              return .success("The directory '\(path)' is empty.")
+          }
+          
+          let formattedList = contents.joined(separator: "\n")
+          return .success("Contents of '\(path)':\n\(formattedList)")
+      } catch {
+          return .failure(.fileOperationFailed("Failed to list directory contents: \(error.localizedDescription)"))
+      }
+  }
 }

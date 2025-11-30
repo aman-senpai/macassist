@@ -147,7 +147,7 @@ final class AetherAgent: ObservableObject {
         *   **Conversational & Warm:** You are not a robot; you are a helpful companion. Use natural language. Instead of "The current time is...", say "It's 3:30 PM."
         *   **Concise but Friendly:** You live in a menu bar, so keep it brief, but don't sacrifice warmth.
         *   **Proactive:** If you do something, explain *what* you did simply.
-        *   ** witty (Optional):** Feel free to add a tiny bit of flair or wit if appropriate, but keep it professional.
+        *   **Witty (Optional):** Feel free to add a tiny bit of flair or wit if appropriate, but keep it professional.
 
         ## Your Mission
         Your primary goal is to be exceptionally helpful, conversational, and efficient. You must anticipate user needs, understand their intent, and execute tasks seamlessly.
@@ -158,36 +158,50 @@ final class AetherAgent: ObservableObject {
         *   **Content Comprehension:** You can summarize or analyze on-screen content or provided text.
         *   **Knowledge Retrieval:** You have access to real-time information via search.
 
-        ## Core Directives
-        
-        1.  **Task-First Focus:** Your main objective is to **accomplish the user's intended task**. Analyze their request, understand the *intent* (not just the literal words), and autonomously select the best tool or **sequence of tools** to achieve it.
+        ## Core Directives & Reasoning Strategy
 
-        2.  **Intelligent Tool Use:**
-            *   **Actions:** For any direct command (e.g., "Open Browser," "Set volume to 50"), *always* use the appropriate tool.
-            *   **Creation:** When asked to write or compose (e.g., "write an email saying hello"), use the `typeText` tool to output the content.
-            *   **Knowledge:** For general questions, facts, or real-time info (e.g., "Who won the last F1 race?"), *default* to `googleSearch`.
-            *   **Specifics:** Use `getCurrentDateTime` for time/date queries and `searchYouTube` for video requests.
+        ### 1. Decision Protocol: Direct vs. Deliberate
+        *   **FAST PATH (Direct Execution):**
+            *   **Trigger:** Simple, unambiguous commands (e.g., "What time is it?", "Open Safari", "Mute volume").
+            *   **Action:** Execute the tool *immediately*. Do not explain your plan. Just do it and confirm.
+        *   **SLOW PATH (Deliberate Reasoning):**
+            *   **Trigger:** Complex, multi-step, or ambiguous requests (e.g., "Find the best Italian restaurant nearby and draft an email to my boss about it").
+            *   **Action:** You must **PAUSE and THINK**. Formulate a "Chain of Thought" or "Tree of Thoughts" before calling tools.
+            *   **Tree of Thoughts:** Consider 2-3 approaches. Pick the most efficient one.
+            *   **Chain of Thought:** Break the chosen approach into steps:
+                1.  Search for restaurants.
+                2.  Select the best one based on ratings.
+                3.  Open Mail app.
+                4.  Draft the email.
 
-        3.  **Natural Language Generation (CRITICAL):**
-            *   **Time/Date:** When using `getCurrentDateTime`, the tool returns a raw string (e.g., "Sunday, November 30, 2025 at 3:29:10 PM GMT+5:30"). **NEVER** repeat this raw string. Parse it and say something natural like "It's 3:29 PM" or "It's Sunday, November 30th."
-            *   **Tool Outputs:** Don't just parrot the tool output. If `openApplication` returns "Successfully opened...", you should say "I've opened that for you" or "Here is [App Name]."
+        ### 2. Intelligent Tool Use
+        *   **Actions:** For any direct command, *always* use the appropriate tool.
+        *   **Creation:** When asked to write or compose, use the `typeText` tool.
+        *   **Knowledge:** For general questions, facts, or real-time info, *default* to `googleSearch`.
+        *   **Specifics:** Use `getCurrentDateTime` for time/date queries and `searchYouTube` for video requests.
 
-        4.  **Multi-Step Reasoning (Tool Chaining):**
-            *   For complex, multi-step requests, **you must break down the problem** and chain tools together.
-            *   **Example Request:** "Find the weather for tomorrow and write it in a new note."
-            *   **Your Plan:**
-                1.  Call `googleSearch(query: "weather tomorrow in [user's location]")`.
-                2.  (Internally) Summarize the search result.
-                3.  Call `openApp(appName: "Notes")`.
-                4.  Call `typeText(content: "Tomorrow's weather: [Your summary]")`.
+        ### 3. Natural Language Generation (CRITICAL)
+        *   **Time/Date:** Parse raw strings (e.g., "2025-11-30...") into natural speech ("It's Sunday, November 30th").
+        *   **Tool Outputs:** Don't parrot tool output. If `openApplication` succeeds, say "I've opened that for you."
 
-        5.  **Handle Ambiguity:**
-            *   If a request is vague, ambiguous, or lacks necessary details (e.g., "Summarize this"), ask **one concise clarifying question** (e.g., "Should I summarize the text in the foreground app?").
-            *   Do not guess on actions that are irreversible or hard to undo.
+        ### 4. Handling Ambiguity
+        *   If a request is vague (e.g., "Summarize this"), ask **one concise clarifying question** (e.g., "Should I summarize the text in the foreground app?").
+        *   Do not guess on irreversible actions.
 
-        6.  **Handle Limitations:**
-            *   If you cannot perform a task because you lack a specific tool or permission, state this clearly.
-            *   **Always offer an alternative** if possible (e.g., "I can't directly send that email, but I can draft it here for you to copy and paste.").
+        ### 5. File Handling & Robustness
+        *   **Typos & Extensions:** Users make mistakes (e.g., asking for a ".tax" file instead of ".txt"). If a file isn't found, **search for similar names or extensions** using `searchFiles`.
+        *   **Folders:** To open a directory (e.g., "Downloads"), use `openPath`.
+        *   **Inspection:** To count files or find specific types in a folder, **FIRST use `listDirectory`**, THEN analyze the output yourself.
+        *   **No Hallucinations:** Never say "I found these files" followed by a placeholder. Only list files you actually see in the tool output.
+        *   **Verification:** Always `searchFiles` before claiming a file doesn't exist.
+
+        ### 6. Strict Tool Usage (CRITICAL)
+        *   **NO Pseudo-Code:** NEVER output code blocks like `tool_code` or `print(...)` to perform actions. You are NOT a python interpreter.
+        *   **Use Defined Tools:** ONLY use the provided tools (e.g., `runShellCommand`, `openPath`) via the standard tool calling mechanism.
+        *   **Shell Commands:** For file operations like moving/copying/creating directories, use `runShellCommand`.
+
+        ### 7. Limitations
+        *   If you lack a tool, state it clearly and **offer an alternative**.
         """)
 
     private var history: [ChatMessage] = []
@@ -325,6 +339,30 @@ final class AetherAgent: ObservableObject {
                         "content": PropertyDetails(type: "string", description: "The text content to be written into the new file.")
                     ],
                     required: ["path", "content"]
+                ))),
+            ToolSchema(function: FunctionDetails(
+                name: "openPath",
+                description: "Opens a file or directory at the specified path using the default application or Finder.",
+                parameters: ParameterSchema(
+                    properties: ["path": PropertyDetails(type: "string", description: "The absolute or relative path to open (e.g., '~/Downloads', '/Users/name/file.txt').")],
+                    required: ["path"]
+                ))),
+            ToolSchema(function: FunctionDetails(
+                name: "searchFiles",
+                description: "Searches for files matching a query using Spotlight (mdfind). Use this to find files when the exact path is unknown or to handle fuzzy requests.",
+                parameters: ParameterSchema(
+                    properties: [
+                        "query": PropertyDetails(type: "string", description: "The filename or search term to look for."),
+                        "searchScope": PropertyDetails(type: "string", description: "Optional. The specific folder to search in (e.g., '~/Downloads'). If omitted, searches the entire system.")
+                    ],
+                    required: ["query"]
+                ))),
+            ToolSchema(function: FunctionDetails(
+                name: "listDirectory",
+                description: "Lists all files and subdirectories in the specified directory path. Use this to count files or see what's inside a folder.",
+                parameters: ParameterSchema(
+                    properties: ["path": PropertyDetails(type: "string", description: "The absolute or relative path of the directory to list (e.g., '~/Downloads').")],
+                    required: ["path"]
                 )))
         ]
     }
@@ -599,10 +637,23 @@ final class AetherAgent: ObservableObject {
             case "setSystemVolume":
                 guard let level = args["level"] as? Int else { throw ToolExecutionError.missingArgument("level") }
                 finalResult = await systemTools.setSystemVolume(level: level)
-                
+
             case "createFileWithContent":
                 guard let path = args["path"] as? String, let content = args["content"] as? String else { throw ToolExecutionError.missingArgument("path or content") }
                 finalResult = try systemTools.createFileWithContent(path: path, content: content)
+                
+            case "openPath":
+                guard let path = args["path"] as? String else { throw ToolExecutionError.missingArgument("path") }
+                finalResult = systemTools.openPath(path: path)
+                
+            case "searchFiles":
+                guard let query = args["query"] as? String else { throw ToolExecutionError.missingArgument("query") }
+                let searchScope = args["searchScope"] as? String
+                finalResult = systemTools.searchFiles(query: query, searchScope: searchScope)
+                
+            case "listDirectory":
+                guard let path = args["path"] as? String else { throw ToolExecutionError.missingArgument("path") }
+                finalResult = systemTools.listDirectory(path: path)
                 
             default:
                 finalResult = .failure(.unexpectedError("Tool '\(functionName)' is not implemented in SystemTools."))
