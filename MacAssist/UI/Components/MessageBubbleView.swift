@@ -8,13 +8,13 @@ struct MessageBubbleView: View {
         HStack {
             if message.role == "user" {
                 Spacer()
-                Text(message.content ?? "No message")
+                Text(.init(message.content ?? "No message"))
                     .padding()
                     .background(Color.blue)
                     .foregroundColor(.white)
                     .cornerRadius(10)
             } else {
-                Text(message.content ?? "No message")
+                Text(.init(message.content ?? "No message"))
                     .padding()
                     .background(Color.gray)
                     .foregroundColor(.white)
