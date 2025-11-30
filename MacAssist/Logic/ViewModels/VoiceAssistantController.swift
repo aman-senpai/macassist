@@ -122,8 +122,15 @@ final class VoiceAssistantController: NSObject, ObservableObject, AVSpeechSynthe
         }
         
         let utterance = AVSpeechUtterance(string: text)
-        utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
-        utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+        
+        // Load settings
+        let voiceId = UserDefaults.standard.string(forKey: "speechVoiceIdentifier") ?? "com.apple.ttsbundle.siri_female_en-US_compact"
+        let rate = UserDefaults.standard.double(forKey: "speechRate")
+        // Handle default value logic manually since double(forKey:) returns 0 if not found, but we want 0.5 default
+        let effectiveRate = (UserDefaults.standard.object(forKey: "speechRate") as? Double) != nil ? Float(rate) : AVSpeechUtteranceDefaultSpeechRate
+
+        utterance.voice = AVSpeechSynthesisVoice(identifier: voiceId) ?? AVSpeechSynthesisVoice(language: "en-US")
+        utterance.rate = effectiveRate
         
         speechSynthesizer.speak(utterance)
     }
@@ -145,7 +152,11 @@ final class VoiceAssistantController: NSObject, ObservableObject, AVSpeechSynthe
     
     private func startSilenceTimer() {
         silenceTimer?.invalidate()
-        silenceTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { [weak self] _ in
+        
+        let timeout = UserDefaults.standard.double(forKey: "silenceTimeout")
+        let effectiveTimeout = (UserDefaults.standard.object(forKey: "silenceTimeout") as? Double) != nil ? timeout : 2.0
+        
+        silenceTimer = Timer.scheduledTimer(withTimeInterval: effectiveTimeout, repeats: false) { [weak self] _ in
             Task {
                 await MainActor.run {
                     print("Silence detected, ending audio recognition request.")

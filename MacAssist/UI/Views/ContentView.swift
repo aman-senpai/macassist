@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var selectedTab: Int = 0
     @State private var selectedConversationId: UUID? // State for sidebar selection
     @AppStorage("openAIApiKey") private var openAIApiKey: String = ""
+    @AppStorage("appTheme") private var appTheme: String = "system"
     
     private var isAssistantActive: Bool {
         controller.isRecording || controller.agent.isProcessing
@@ -57,6 +58,7 @@ struct ContentView: View {
             Text(controller.speechErrorMessage)
         })
         .environmentObject(controller.contextManager) // Inject ContextManager from controller
+        .preferredColorScheme(appTheme == "system" ? nil : (appTheme == "dark" ? .dark : .light))
     }
 
     private var chatView: some View {
@@ -165,30 +167,7 @@ struct ContentView: View {
     }
 
     private var settingsView: some View {
-        VStack(alignment: .center, spacing: 24) {
-            // Legacy Notice (if old API key exists)
-            if !openAIApiKey.isEmpty && !UserDefaults.standard.bool(forKey: "llm_settings_migrated") {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.orange)
-                        Text("Settings Migration")
-                            .font(.headline)
-                            .bold()
-                    }
-                    Text("Your OpenAI API key has been migrated to the new provider settings. You can now choose between OpenAI, Gemini, and Ollama.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .padding()
-                .background(Color.orange.opacity(0.1))
-                .cornerRadius(8)
-                .frame(maxWidth: 400)
-            }
-            
-            ProviderSettingsView()
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        SettingsView()
     }
     
     static func formattedTimestamp(for message: ChatMessage) -> String {

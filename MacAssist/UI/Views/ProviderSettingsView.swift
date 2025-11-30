@@ -190,7 +190,7 @@ struct ProviderSettingsView: View {
             Spacer()
         }
         .padding()
-        .frame(maxWidth: 400)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     private func modelSuggestions(for provider: LLMProviderType) -> String {
