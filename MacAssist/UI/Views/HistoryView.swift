@@ -2,110 +2,99 @@ import SwiftUI
 
 struct HistoryView: View {
     @EnvironmentObject var historyManager: HistoryManager
-    @State private var selectedConversationId: UUID?
+    @EnvironmentObject var controller: VoiceAssistantController
+    @Binding var selectedConversationId: UUID?
 
     var body: some View {
-        NavigationView {
-            List {
-                ForEach(historyManager.conversationHistory.sorted(by: { $0.timestamp > $1.timestamp })) { conversation in
-                    NavigationLink(destination: ConversationDetailView(conversation: conversation, onDelete: {
-                        self.selectedConversationId = nil
-                        // Delay the deletion slightly to allow the navigation to pop back
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+        List(selection: $selectedConversationId) {
+            ForEach(historyManager.conversationHistory.sorted(by: { $0.timestamp > $1.timestamp })) { conversation in
+                HistoryRowView(conversation: conversation, selectedConversationId: $selectedConversationId)
+                    .tag(conversation.id)
+                    .onTapGesture {
+                        selectedConversationId = conversation.id
+                        controller.loadConversation(conversation)
+                    }
+                    .contextMenu {
+                        Button(role: .destructive) {
                             historyManager.deleteConversation(conversation)
-                        }
-                    }), tag: conversation.id, selection: $selectedConversationId) {
-                        VStack(alignment: .leading) {
-                            Text(conversation.title) // Use the computed title (stored or fallback)
-                                .font(.headline)
-                            Text("Conversation from \(conversation.timestamp, formatter: itemFormatter)")
-                                .font(.caption)
-                                .foregroundColor(.gray)
+                            if selectedConversationId == conversation.id {
+                                selectedConversationId = nil
+                                controller.startNewChat()
+                            }
+                        } label: {
+                            Label("Delete", systemImage: "trash")
                         }
                     }
-                }
             }
-            .navigationTitle("History")
-
-            Text("Select a conversation to view its details.")
-                .foregroundColor(.gray)
         }
+        .listStyle(.sidebar)
+        .navigationTitle("History")
     }
 }
 
-struct ConversationDetailView: View {
-    @EnvironmentObject var historyManager: HistoryManager
+struct HistoryRowView: View {
     let conversation: Conversation
-    let onDelete: () -> Void
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                Text(conversation.title)
-                    .font(.title)
-                    .bold()
-                Text("Timestamp: \(conversation.timestamp, formatter: itemFormatter)")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                
-                if let summary = conversation.summary {
-                    Text(summary)
-                        .font(.body)
-                        .italic()
-                        .padding(.vertical, 4)
-                        .foregroundColor(.secondary)
-                }
-                
-                Divider()
-                ForEach(conversation.messages, id: \.id) { message in
-                    MessageBubbleView(message: ChatMessage(id: message.id, role: message.role, content: message.content, timestamp: message.timestamp))
-                }
-            }
-            .padding()
-        }
-        .navigationTitle("Details")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                HStack {
-                    Button(action: {
-                        Task {
-                            await regenerateTitleAndSummary()
-                        }
-                    }) {
-                        Image(systemName: "arrow.triangle.2.circlepath")
-                            .help("Regenerate Title & Summary")
-                    }
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                    }
-                }
-            }
-        }
-    }
+    @EnvironmentObject var historyManager: HistoryManager
+    @EnvironmentObject var controller: VoiceAssistantController
+    @Binding var selectedConversationId: UUID?
+    @State private var isHovering = false
+    @State private var showingDeleteConfirmation = false
     
-    // Function to manually regenerate title and summary
-    private func regenerateTitleAndSummary() async {
-        do {
-            let aiService = try AIService()
-            let chatMessages = conversation.messages.map { message in
-                AIService.ChatMessage(role: AIService.ChatRole(rawValue: message.role) ?? .user, content: message.content)
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading) {
+                Text(conversation.title)
+                    .font(.headline)
+                    .lineLimit(1)
             }
+            Spacer()
             
-            let (title, summary) = try await aiService.generateTitleAndSummary(for: chatMessages)
-            
-            // Update the conversation using HistoryManager
-            await MainActor.run {
-                var updatedConversation = conversation
-                updatedConversation.storedTitle = title
-                updatedConversation.summary = summary
-                historyManager.saveConversation(updatedConversation)
-                print("Regenerated title: \(title)")
+            if isHovering || showingDeleteConfirmation {
+                Button(action: {
+                    showingDeleteConfirmation = true
+                }) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 14))
+                        .foregroundColor(.red) // Red for delete action
+                        .padding(4)
+                        .background(Color.gray.opacity(0.1))
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.borderless)
+                .frame(width: 24, height: 24)
+                .confirmationDialog("Delete Conversation?", isPresented: $showingDeleteConfirmation) {
+                    Button("Delete", role: .destructive) {
+                        historyManager.deleteConversation(conversation)
+                        if selectedConversationId == conversation.id {
+                            selectedConversationId = nil
+                            controller.startNewChat()
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("Are you sure you want to delete this conversation? This action cannot be undone.")
+                }
+            } else {
+                // Invisible placeholder to prevent layout jumpiness
+                Image(systemName: "trash")
+                    .font(.system(size: 14))
+                    .padding(4)
+                    .opacity(0)
+                    .frame(width: 24, height: 24)
             }
-        } catch {
-            print("Error regenerating: \(error)")
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .background(isHovering ? Color.gray.opacity(0.2) : Color.clear)
+        .cornerRadius(6)
+        .contentShape(Rectangle())
+        .onHover { hovering in
+            isHovering = hovering
         }
     }
 }
+
+
 
 private let itemFormatter: DateFormatter = {
     let formatter = DateFormatter()

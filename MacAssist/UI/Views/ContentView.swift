@@ -16,6 +16,7 @@ struct ContentView: View {
     @EnvironmentObject var contextManager: ContextManager // NEW: Inject ContextManager
     
     @State private var selectedTab: Int = 0
+    @State private var selectedConversationId: UUID? // State for sidebar selection
     @AppStorage("openAIApiKey") private var openAIApiKey: String = ""
     
     private var isAssistantActive: Bool {
@@ -31,12 +32,7 @@ struct ContentView: View {
                         Label("Chat", systemImage: "message.fill")
                     }
                 
-                HistoryView()
-                    .tag(1)
-                    .tabItem {
-                        Label("History", systemImage: "clock.fill")
-                    }
-                
+
                 ContextView()
                     .tag(3)
                     .tabItem {
@@ -64,7 +60,10 @@ struct ContentView: View {
     }
 
     private var chatView: some View {
-        NavigationStack {
+        NavigationSplitView {
+            HistoryView(selectedConversationId: $selectedConversationId)
+                .navigationSplitViewColumnWidth(min: 250, ideal: 300)
+        } detail: {
             VStack(spacing: 0) {
                 ScrollViewReader { proxy in
                     List(controller.agent.messages) { message in
@@ -90,8 +89,11 @@ struct ContentView: View {
             .navigationTitle("Chat")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button(action: controller.startNewChat) {
-                        Image(systemName: "plus")
+                    Button(action: {
+                        controller.startNewChat()
+                        selectedConversationId = nil // Clear selection on new chat
+                    }) {
+                        Image(systemName: "square.and.pencil")
                     }
                     .help("Start New Chat")
                 }

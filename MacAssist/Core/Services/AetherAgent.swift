@@ -437,6 +437,42 @@ final class AetherAgent: ObservableObject {
         print("[AetherAgent] Started new chat session: \(self.conversationID)")
     }
     
+    func loadConversation(_ conversation: Conversation) {
+        // Save current conversation before switching
+        saveConversation()
+        
+        self.conversationID = conversation.id
+        
+        // Reconstruct history
+        // We need to ensure system prompt is present.
+        // If the loaded conversation doesn't have it (it shouldn't, as we filter it out on save), we add it back.
+        var newHistory: [ChatMessage] = [systemPrompt]
+        
+        // Inject active contexts (optional: should we inject current contexts or rely on what was in the chat?
+        // For now, let's inject current active contexts to allow new context to apply to old chats if desired,
+        // or strictly speaking, we might want to just load the chat as is.
+        // Let's stick to the pattern: System Prompt -> Context -> Messages)
+        let activeContexts = contextManager.contexts.filter { $0.isEnabled }
+        if !activeContexts.isEmpty {
+            let contextString = activeContexts.map { $0.text }.joined(separator: "\n\n")
+            let contextMessage = ChatMessage(role: "system", content: "User Context:\n\(contextString)")
+            newHistory.append(contextMessage)
+        }
+        
+        // Convert Conversation.Message back to ChatMessage
+        let loadedMessages = conversation.messages.map { msg in
+            ChatMessage(id: msg.id, role: msg.role, content: msg.content, timestamp: msg.timestamp)
+        }
+        
+        newHistory.append(contentsOf: loadedMessages)
+        self.history = newHistory
+        self.messages = loadedMessages
+        self.currentAgentStatus = .idle
+        self.spokenResponse = nil
+        
+        print("[AetherAgent] Loaded conversation: \(self.conversationID)")
+    }
+    
     
     private func processResponse() async {
         // Check if provider is configured

@@ -27,7 +27,7 @@ struct MacAssistApp: App {
             ContentView()
                 .environmentObject(voiceAssistantController) // Pass controller to the view
                 .environmentObject(historyManager) // Use the shared instance
-                .frame(minWidth: 380, idealWidth: 450, maxWidth: 600, minHeight: 400, idealHeight: 500, maxHeight: 800)
+                .frame(minWidth: 600, idealWidth: 800, maxWidth: 1200, minHeight: 400, idealHeight: 600, maxHeight: 900)
         }
         .onChange(of: scenePhase) {
             if scenePhase == .inactive {

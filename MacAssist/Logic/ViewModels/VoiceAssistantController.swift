@@ -100,6 +100,21 @@ final class VoiceAssistantController: NSObject, ObservableObject, AVSpeechSynthe
         agent.startNewChat()
     }
     
+    func loadConversation(_ conversation: Conversation) {
+        // Stop any ongoing recording or speech
+        if isRecording {
+            stopRecording()
+        }
+        if speechSynthesizer.isSpeaking {
+            speechSynthesizer.stopSpeaking(at: .immediate)
+        }
+        
+        currentInput = ""
+        isContinuousConversationActive = false
+        
+        agent.loadConversation(conversation)
+    }
+    
     // MARK: - Speech Synthesis (Text-to-Speech)
     private func speak(text: String) {
         if speechSynthesizer.isSpeaking {
