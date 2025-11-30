@@ -149,11 +149,67 @@ class ConversationManager: NSObject, ObservableObject, SFSpeechRecognizerDelegat
         // Request necessary permissions when the manager is initialized.
         requestPermissions()
         setupInitialConversationMessages()
+        
+        // Check for unsummarized conversations on startup
+        Task {
+            await processUnsummarizedConversations()
+        }
     }
 
     private func setupInitialConversationMessages() {
         // CHANGED: Qualified ChatMessage and ChatRole
         conversationMessages = [AIService.ChatMessage(role: .system, content: systemPrompt)]
+    }
+    
+    /// Checks the most recent conversation and generates a title/summary if missing.
+    private func processUnsummarizedConversations() async {
+        // We need to access historyManager.conversationHistory
+        // Since HistoryManager is an ObservableObject, we should access it carefully.
+        // However, we are in the init/startup phase.
+        
+        // Get the most recent conversation
+        // Note: historyManager.conversationHistory is @Published, so we access the underlying value or use MainActor if needed.
+        // For simplicity and safety, we'll run this check on the MainActor since historyManager is likely bound to UI.
+        
+        await MainActor.run {
+            // Sort by timestamp descending to get the latest
+            let sortedHistory = self.historyManager.conversationHistory.sorted(by: { $0.timestamp > $1.timestamp })
+            
+            guard let latestConversation = sortedHistory.first else {
+                return
+            }
+            
+            // Check if it needs processing (no stored title or empty stored title)
+            if latestConversation.storedTitle == nil || latestConversation.storedTitle?.isEmpty == true {
+                print("Found unsummarized conversation: \(latestConversation.id). Generating title/summary...")
+                
+                // We need the messages to generate the summary.
+                // Map Conversation.Message to AIService.ChatMessage
+                let chatMessages = latestConversation.messages.map { message in
+                    AIService.ChatMessage(role: AIService.ChatRole(rawValue: message.role) ?? .user, content: message.content)
+                }
+                
+                Task {
+                    // Use a background task for the LLM call to avoid blocking main thread
+                    if let service = self.openAIService {
+                        do {
+                            let (title, summary) = try await service.generateTitleAndSummary(for: chatMessages)
+                            
+                            // Update the conversation on MainActor
+                            await MainActor.run {
+                                var updatedConversation = latestConversation
+                                updatedConversation.storedTitle = title
+                                updatedConversation.summary = summary
+                                self.historyManager.saveConversation(updatedConversation)
+                                print("Updated conversation \(latestConversation.id) with title: \(title)")
+                            }
+                        } catch {
+                            print("Failed to generate startup title/summary: \(error)")
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - Permission Handling
@@ -527,9 +583,35 @@ class ConversationManager: NSObject, ObservableObject, SFSpeechRecognizerDelegat
         // Save the conversation to history before clearing it
         let filteredMessages = conversationMessages.filter { $0.role != .system }
         if !filteredMessages.isEmpty {
-            let messages = filteredMessages.map { Message(id: UUID(), content: $0.content ?? "", role: $0.role.rawValue, timestamp: Date()) }
-            let conversation = Conversation(id: UUID(), messages: messages, timestamp: Date())
-            historyManager.saveConversation(conversation)
+            // Capture current messages and service for async task
+            let messagesToSave = filteredMessages
+            let currentService = openAIService
+            
+            Task {
+                var title: String?
+                var summary: String?
+                
+                // Generate title and summary if service is available
+                if let service = currentService {
+                    do {
+                        let result = try await service.generateTitleAndSummary(for: messagesToSave)
+                        title = result.title
+                        summary = result.summary
+                    } catch {
+                        print("Failed to generate title/summary: \(error)")
+                    }
+                }
+                
+                // Create and save conversation on main actor (HistoryManager is ObservableObject)
+                await MainActor.run {
+                    let messages = messagesToSave.map { Message(id: UUID(), content: $0.content ?? "", role: $0.role.rawValue, timestamp: Date()) }
+                    var conversation = Conversation(id: UUID(), messages: messages, timestamp: Date())
+                    conversation.storedTitle = title
+                    conversation.summary = summary
+                    
+                    self.historyManager.saveConversation(conversation)
+                }
+            }
         }
         
         state = .idle

@@ -80,12 +80,20 @@ class GeminiProvider: LLMProvider {
         // Decode response
         let geminiResponse = try JSONDecoder().decode(GeminiResponse.self, from: data)
         
-        guard let candidate = geminiResponse.candidates.first,
-              let part = candidate.content.parts.first else {
+        guard let candidate = geminiResponse.candidates.first else {
+             throw LLMProviderError.apiError("No candidates returned")
+        }
+        
+        guard let content = candidate.content,
+              let parts = content.parts,
+              let part = parts.first else {
+            if let reason = candidate.finishReason {
+                throw LLMProviderError.apiError("No content returned. Finish reason: \(reason)")
+            }
             throw LLMProviderError.apiError("No response content returned")
         }
         
-        return convertToLLMResponse(part, allParts: candidate.content.parts)
+        return convertToLLMResponse(part, allParts: parts)
     }
     
     // MARK: - Helper Methods
@@ -234,11 +242,12 @@ private struct GeminiResponse: Codable {
     let candidates: [Candidate]
     
     struct Candidate: Codable {
-        let content: Content
+        let content: Content?
+        let finishReason: String?
     }
     
     struct Content: Codable {
-        let parts: [GeminiPart]
+        let parts: [GeminiPart]?
         let role: String?
     }
 }
