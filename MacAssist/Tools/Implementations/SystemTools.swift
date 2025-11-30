@@ -489,4 +489,45 @@ final class SystemTools {
           return .failure(.fileOperationFailed("Failed to list directory contents: \(error.localizedDescription)"))
       }
   }
+
+  func readFileContent(path: String) -> Result<String, ToolExecutionError> {
+      let cleanPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
+      let expandedPath = (cleanPath as NSString).expandingTildeInPath
+      let url = URL(fileURLWithPath: expandedPath)
+      
+      var isDirectory: ObjCBool = false
+      guard FileManager.default.fileExists(atPath: expandedPath, isDirectory: &isDirectory) else {
+          return .failure(.fileOperationFailed("The file does not exist: \(cleanPath)"))
+      }
+      
+      if isDirectory.boolValue {
+          return .failure(.fileOperationFailed("The path is a directory, not a file. Use 'listDirectory' to see its contents."))
+      }
+      
+      do {
+          let content = try String(contentsOf: url, encoding: .utf8)
+          return .success(content)
+      } catch {
+          return .failure(.fileOperationFailed("Failed to read file content. Ensure it is a text file with UTF-8 encoding. Error: \(error.localizedDescription)"))
+      }
+  }
+
+  func writeToFile(path: String, content: String) -> Result<String, ToolExecutionError> {
+      let cleanPath = path.trimmingCharacters(in: .whitespacesAndNewlines)
+      let expandedPath = (cleanPath as NSString).expandingTildeInPath
+      let url = URL(fileURLWithPath: expandedPath)
+      
+      let directoryURL = url.deletingLastPathComponent()
+      
+      do {
+          if !FileManager.default.fileExists(atPath: directoryURL.path) {
+              try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+          }
+          
+          try content.write(to: url, atomically: true, encoding: .utf8)
+          return .success("Successfully wrote content to file at: \(cleanPath)")
+      } catch {
+          return .failure(.fileOperationFailed("Failed to write to file: \(error.localizedDescription)"))
+      }
+  }
 }

@@ -363,6 +363,23 @@ final class AetherAgent: ObservableObject {
                 parameters: ParameterSchema(
                     properties: ["path": PropertyDetails(type: "string", description: "The absolute or relative path of the directory to list (e.g., '~/Downloads').")],
                     required: ["path"]
+                ))),
+            ToolSchema(function: FunctionDetails(
+                name: "readFileContent",
+                description: "Reads the text content of a file at the specified path. Use this to analyze code files, read notes, or check configuration files.",
+                parameters: ParameterSchema(
+                    properties: ["path": PropertyDetails(type: "string", description: "The absolute or relative path of the file to read (e.g., '~/Documents/notes.txt').")],
+                    required: ["path"]
+                ))),
+            ToolSchema(function: FunctionDetails(
+                name: "writeToFile",
+                description: "Writes text content to a file at the specified path. Creates the file if it doesn't exist, and overwrites it if it does. Use this for creating new files or editing existing ones.",
+                parameters: ParameterSchema(
+                    properties: [
+                        "path": PropertyDetails(type: "string", description: "The absolute or relative path of the file to write to (e.g., '~/Documents/notes.txt')."),
+                        "content": PropertyDetails(type: "string", description: "The text content to write to the file.")
+                    ],
+                    required: ["path", "content"]
                 )))
         ]
     }
@@ -668,6 +685,14 @@ final class AetherAgent: ObservableObject {
             case "listDirectory":
                 guard let path = args["path"] as? String else { throw ToolExecutionError.missingArgument("path") }
                 finalResult = systemTools.listDirectory(path: path)
+
+            case "readFileContent":
+                guard let path = args["path"] as? String else { throw ToolExecutionError.missingArgument("path") }
+                finalResult = systemTools.readFileContent(path: path)
+
+            case "writeToFile":
+                guard let path = args["path"] as? String, let content = args["content"] as? String else { throw ToolExecutionError.missingArgument("path or content") }
+                finalResult = systemTools.writeToFile(path: path, content: content)
                 
             default:
                 finalResult = .failure(.unexpectedError("Tool '\(functionName)' is not implemented in SystemTools."))
