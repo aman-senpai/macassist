@@ -3,23 +3,73 @@ import SwiftUI
 
 struct MessageBubbleView: View {
     let message: ChatMessage
+    @State private var isHovering = false
+    @State private var showCheckmark = false
     
     var body: some View {
-        HStack {
+        HStack(alignment: .bottom, spacing: 8) {
             if message.role == "user" {
-                Spacer()
+                Spacer(minLength: 20)
+                
+                // Copy button for user (appears on left of message)
+                if isHovering {
+                    copyButton
+                }
+                
                 Text(.init(message.content ?? "No message"))
-                    .padding()
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Color.gray.opacity(0.3))
+                    .foregroundColor(.primary)
+                    .cornerRadius(16)
             } else {
                 Text(.init(message.content ?? "No message"))
-                    .padding()
-                    .background(Color.gray)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                Spacer()
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .foregroundColor(.primary)
+                
+                // Copy button for assistant (appears on right of message)
+                if isHovering {
+                    copyButton
+                }
+                
+                Spacer(minLength: 20)
+            }
+        }
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isHovering = hovering
+            }
+        }
+    }
+    
+    private var copyButton: some View {
+        Button(action: copyToClipboard) {
+            Image(systemName: showCheckmark ? "checkmark.circle.fill" : "doc.on.doc")
+                .font(.system(size: 14))
+                .foregroundColor(showCheckmark ? .green : .secondary)
+                .padding(6)
+                .background(.regularMaterial)
+                .clipShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .transition(.opacity.combined(with: .scale))
+    }
+    
+    private func copyToClipboard() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(message.content ?? "", forType: .string)
+        
+        withAnimation {
+            showCheckmark = true
+        }
+        
+        // Reset checkmark after 2 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation {
+                showCheckmark = false
             }
         }
     }
