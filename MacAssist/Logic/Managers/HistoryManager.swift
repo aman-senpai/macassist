@@ -156,17 +156,24 @@ class HistoryManager: ObservableObject {
     }
 
     /// Saves the current session's conversation history to its dedicated JSON file.
+    /// Saves the current session's conversation history to its dedicated JSON file.
     func saveCurrentSessionHistory() {
-        do {
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = .prettyPrinted // Makes the JSON file human-readable
-            encoder.dateEncodingStrategy = .iso8601 // Consistent date formatting
-            
-            let data = try encoder.encode(conversationHistory)
-            try data.write(to: currentSessionFileURL)
-            print("Successfully saved current session history to: \(currentSessionFileURL.lastPathComponent)")
-        } catch {
-            print("Error saving current session history to \(currentSessionFileURL.lastPathComponent): \(error)")
+        // Capture the data needed for saving to avoid thread safety issues with the published property
+        let historyToSave = self.conversationHistory
+        let fileURL = self.currentSessionFileURL
+        
+        Task.detached(priority: .background) {
+            do {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = .prettyPrinted // Makes the JSON file human-readable
+                encoder.dateEncodingStrategy = .iso8601 // Consistent date formatting
+                
+                let data = try encoder.encode(historyToSave)
+                try data.write(to: fileURL)
+                print("Successfully saved current session history to: \(fileURL.lastPathComponent)")
+            } catch {
+                print("Error saving current session history to \(fileURL.lastPathComponent): \(error)")
+            }
         }
     }
     

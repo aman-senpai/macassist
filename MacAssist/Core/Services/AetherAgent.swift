@@ -386,6 +386,20 @@ final class AetherAgent: ObservableObject {
         }
     }
     
+    func startNewChat() {
+        // Save current conversation one last time to be sure
+        saveConversation()
+        
+        // Reset state
+        self.conversationID = UUID()
+        self.history = [systemPrompt]
+        self.messages = [ChatMessage(id: UUID(), role: "assistant", content: "Hello! Enter your query to start.")]
+        self.currentAgentStatus = .idle
+        self.spokenResponse = nil
+        
+        print("[AetherAgent] Started new chat session: \(self.conversationID)")
+    }
+    
     
     private func processResponse() async {
         // Check if provider is configured

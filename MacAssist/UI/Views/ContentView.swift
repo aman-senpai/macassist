@@ -56,28 +56,39 @@ struct ContentView: View {
     }
 
     private var chatView: some View {
-        VStack(spacing: 0) {
-            ScrollViewReader { proxy in
-                List(controller.agent.messages) { message in
-                    messageRow(for: message)
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                        .id(message.safeId)
-                }
-                .listStyle(.plain)
-                .padding(.horizontal, 12)
-                .onChange(of: controller.agent.messages.count) {
-                    if let lastMessage = controller.agent.messages.last {
-                        proxy.scrollTo(lastMessage.safeId, anchor: .bottom)
+        NavigationStack {
+            VStack(spacing: 0) {
+                ScrollViewReader { proxy in
+                    List(controller.agent.messages) { message in
+                        messageRow(for: message)
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                            .id(message.safeId)
+                    }
+                    .listStyle(.plain)
+                    .padding(.horizontal, 12)
+                    .onChange(of: controller.agent.messages.count) {
+                        if let lastMessage = controller.agent.messages.last {
+                            proxy.scrollTo(lastMessage.safeId, anchor: .bottom)
+                        }
                     }
                 }
+                
+                Divider()
+                
+                inputBar
             }
-            
-            Divider()
-            
-            inputBar
+            .padding(.top, 6)
+            .navigationTitle("Chat")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: controller.startNewChat) {
+                        Image(systemName: "plus")
+                    }
+                    .help("Start New Chat")
+                }
+            }
         }
-        .padding(.top, 6)
     }
 
     private var providerNameView: some View {
