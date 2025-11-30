@@ -161,20 +161,29 @@ struct ContentView: View {
 
     private var settingsView: some View {
         VStack(alignment: .center, spacing: 24) {
-            VStack(alignment: .center, spacing: 6) {
-                Text("OpenAI API Key").font(.headline).bold()
-                SecureField("Enter your OpenAI API Key", text: $openAIApiKey)
-                    .textFieldStyle(.roundedBorder)
-                    .font(.body)
+            // Legacy Notice (if old API key exists)
+            if !openAIApiKey.isEmpty && !UserDefaults.standard.bool(forKey: "llm_settings_migrated") {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Text("Settings Migration")
+                            .font(.headline)
+                            .bold()
+                    }
+                    Text("Your OpenAI API key has been migrated to the new provider settings. You can now choose between OpenAI, Gemini, and Ollama.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding()
+                .background(Color.orange.opacity(0.1))
+                .cornerRadius(8)
+                .frame(maxWidth: 400)
             }
-            HStack(alignment: .top, spacing: 6) {
-                Image(systemName: "info.circle").foregroundColor(.secondary).font(.body).padding(.top, 2)
-                Text("Your key is stored securely on your Mac. It is required to use the AI features.")
-                    .font(.caption).foregroundColor(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            
+            ProviderSettingsView()
         }
-        .frame(maxWidth: 250)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     static func formattedTimestamp(for message: ChatMessage) -> String {

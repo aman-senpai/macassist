@@ -227,21 +227,24 @@ final class VoiceAssistantController: NSObject, ObservableObject, AVSpeechSynthe
         }
     
         private func stopAudioEngine() {
-            // This is now the single, robust cleanup function. It is safe to call multiple times.
-            if audioEngine.isRunning {
-                audioEngine.stop()
-                // A tap is only guaranteed to exist if the engine was running.
-                // Removing it conditionally prevents crashes.
-                audioEngine.inputNode.removeTap(onBus: 0)
+        // This is now the single, robust cleanup function. It is safe to call multiple times.
+        
+        // Remove tap FIRST if engine is running
+        if audioEngine.isRunning {
+            let inputNode = audioEngine.inputNode
+            // Check if there's actually a tap to remove
+            if inputNode.numberOfInputs > 0 {
+                inputNode.removeTap(onBus: 0)
             }
-            
-            recognitionRequest = nil
-            recognitionTask?.cancel() // Cancel to prevent any lingering completion handlers.
-            recognitionTask = nil
-            
-            isRecording = false
-            silenceTimer?.invalidate()
-            silenceTimer = nil
+            audioEngine.stop()
         }
+        
+        recognitionRequest = nil
+        recognitionTask?.cancel() // Cancel to prevent any lingering completion handlers.
+        recognitionTask = nil
+        
+        isRecording = false
+        silenceTimer?.invalidate()
+        silenceTimer = nil
     }
-
+}

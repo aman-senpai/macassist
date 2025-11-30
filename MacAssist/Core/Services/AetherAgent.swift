@@ -78,13 +78,13 @@ struct ChatMessage: Identifiable, Codable {
 
 struct Annotation: Codable {}
 
-struct ToolCall: Codable {
+struct ToolCall: Codable, Equatable {
     let id: String
     let function: FunctionCall
     let type: String = "function"
 }
 
-struct FunctionCall: Codable {
+struct FunctionCall: Codable, Equatable {
     let name: String
     let arguments: String
 }
@@ -184,7 +184,6 @@ final class AetherAgent: ObservableObject {
             * **Always offer an alternative** if possible (e.g., "I can't directly send that email, but I can draft it here for you to copy and paste.").
         """)
 
-    private let modelName = "gpt-4o-mini"
     private var history: [ChatMessage] = []
     
     
@@ -345,11 +344,18 @@ final class AetherAgent: ObservableObject {
     
     
     private func processResponse() async {
-        let apiKey = UserDefaults.standard.string(forKey: "openAIApiKey") ?? ""
-        guard !apiKey.isEmpty else {
-            addAssistantMessage(content: "Please enter a valid OpenAI API Key in the Settings tab.")
-            currentAgentStatus = .error("API Key Missing")
-            return
+        // Check if provider is configured
+        let settings = LLMSettings.load()
+        let providerType = settings.selectedProvider
+        let config = settings.config(for: providerType)
+        
+        // Check API key if required
+        if providerType.requiresAPIKey {
+            guard let apiKey = config.apiKey, !apiKey.isEmpty else {
+                addAssistantMessage(content: "Please configure your \(providerType.displayName) API key in the Settings tab.")
+                currentAgentStatus = .error("API Key Missing")
+                return
+            }
         }
 
         do {
@@ -357,10 +363,38 @@ final class AetherAgent: ObservableObject {
             
             for _ in 0..<5 {
                 currentAgentStatus = .responding
-                // Call OpenAI with tools for general conversation
-                let (responseMessage, completionError) = try await callOpenAI(with: conversationHistory, includeTools: true)
+                // Call LLM with tools for general conversation
+                let (responseMessage, completionError) = try await callLLM(with: conversationHistory, includeTools: true)
                 
                 if let error = completionError {
+                    let errorMessage = error.localizedDescription
+                    
+                    // Check if error is because model doesn't support tools
+                    if errorMessage.contains("does not support tools") || errorMessage.contains("toolsNotSupported") {
+                        print("[AetherAgent] Model doesn't support tools, retrying without tools...")
+                        // Retry without tools
+                        let (retryResponse, retryError) = try await callLLM(with: conversationHistory, includeTools: false)
+                        
+                        if let retryErr = retryError {
+                            addAssistantMessage(content: "API Error: \(retryErr.localizedDescription)")
+                            currentAgentStatus = .error("API Error")
+                            return
+                        }
+                        
+                        guard let response = retryResponse else {
+                            addAssistantMessage(content: "Received an empty response from the AI.")
+                            currentAgentStatus = .error("Empty AI Response")
+                            return
+                        }
+                        
+                        // Continue with the response (no tool calls available)
+                        let finalContent = response.content ?? "I processed your request, but the final response was empty."
+                        addAssistantMessage(content: "Note: This model doesn't support tool calling, so I can only provide information.\n\n\(finalContent)")
+                        history = conversationHistory + [response]
+                        currentAgentStatus = .idle
+                        return
+                    }
+                    
                     addAssistantMessage(content: "API Error: \(error.localizedDescription)")
                     currentAgentStatus = .error("API Error")
                     return
@@ -453,8 +487,8 @@ final class AetherAgent: ObservableObject {
         let promptMessage = ChatMessage(role: "user", content: summaryPrompt)
         
         do {
-            // IMPORTANT CHANGE: Call OpenAI *without* tools for summarization
-            let (response, error) = try await callOpenAI(with: [systemPrompt, promptMessage], includeTools: false)
+            // Call LLM *without* tools for summarization
+            let (response, error) = try await callLLM(with: [systemPrompt, promptMessage], includeTools: false)
             
             if let error = error {
                 return .failure(.summarizationFailed("API call failed: \(error.localizedDescription)"))
@@ -584,104 +618,62 @@ final class AetherAgent: ObservableObject {
         return ChatMessage(id: UUID(), role: "tool", content: resultContent, toolCallId: toolCall.id, name: functionName)
     }
     
-    // MARK: - OpenAI Network Call
+    // MARK: - LLM Network Call
 
-    private func callOpenAI(with messages: [ChatMessage], includeTools: Bool) async throws -> (ChatMessage?, Error?) { // MODIFIED: Added includeTools parameter
-        let apiKey = UserDefaults.standard.string(forKey: "openAIApiKey") ?? ""
+    private func callLLM(with messages: [ChatMessage], includeTools: Bool) async throws -> (ChatMessage?, Error?) {
+        // Load settings and create AIService
+        let settings = LLMSettings.load()
+        
+        guard let aiService = try? AIService() else {
+            throw NSError(domain: "AIService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Failed to initialize AI service"])
+        }
+        
+        // Convert messages to LLMMessage format
+        let llmMessages = messages.map { message -> LLMMessage in
+            LLMMessage(
+                role: message.role,
+                content: message.content,
+                toolCalls: message.toolCalls,
+                toolCallId: message.toolCallId,
+                name: message.name
+            )
+        }
+        
+        // Prepare tools if needed
+        let tools: [ToolSchema]? = includeTools ? toolSchemas : nil
 
-        let url = URL(string: "https://api.openai.com/v1/chat/completions")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let encoder = JSONEncoder()
-        encoder.keyEncodingStrategy = .convertToSnakeCase
-        
-        let apiMessages = messages.map { message -> [String: Any] in
-            var dict: [String: Any] = ["role": message.role]
-            if let content = message.content { dict["content"] = content }
-            if let toolCallId = message.toolCallId, let name = message.name, let content = message.content {
-                dict["tool_call_id"] = toolCallId
-                dict["name"] = name
-                dict["content"] = content
-            }
-            if let toolCalls = message.toolCalls {
-                dict["tool_calls"] = toolCalls.map { call -> [String: Any] in
-                    var callDict: [String: Any] = ["id": call.id, "type": call.type]
-                    callDict["function"] = ["name": call.function.name, "arguments": call.function.arguments]
-                    return callDict
-                }
-            }
-            return dict
-        }
-        
-        var apiPayload: [String: Any] = [
-            "model": modelName,
-            "messages": apiMessages
-        ]
-        
-        // MODIFIED: Only include tools if `includeTools` is true
-        if includeTools {
-            apiPayload["tools"] = try toolSchemas.map { try encoder.encode($0) }
-                .compactMap { try JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        }
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: apiPayload, options: [])
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        #if DEBUG
-        if let httpResponse = response as? HTTPURLResponse {
-            print("[AetherAgent] Status code: \(httpResponse.statusCode)")
-        }
-        print("[AetherAgent] Returned data length: \(data.count)")
-        if data.count < 1000 {
-            print("[AetherAgent] Data as String: \(String(data: data, encoding: .utf8) ?? "<unreadable>")")
-        }
-        #endif
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
+        do {
+            // Call AIService with tools - use nil for model to use provider's configured default
+            let llmResponse = try await aiService.sendMessageWithTools(
+                messages: llmMessages,
+                model: nil,
+                temperature: nil,
+                maxTokens: nil,
+                tools: tools
+            )
+            
             #if DEBUG
-            print("[AetherAgent] Response is not an HTTPURLResponse.")
+            print("[AetherAgent] LLM Response: content=\(llmResponse.content ?? "nil"), toolCalls=\(llmResponse.toolCalls?.count ?? 0)")
             #endif
-            throw URLError(.badServerResponse)
-        }
-        
-        guard httpResponse.statusCode == 200 else {
-            if let errorData = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let errorDict = errorData["error"] as? [String: Any],
-               let errorMessage = errorDict["message"] as? String {
-                #if DEBUG
-                print("[AetherAgent] API Error message: \(errorMessage)")
-                #endif
-                throw NSError(domain: "OpenAI", code: 1, userInfo: [NSLocalizedDescriptionKey: errorMessage])
-            }
+            
+            // Convert LLMResponse back to ChatMessage
+            let chatMessage = ChatMessage(
+                id: UUID(),
+                role: "assistant",
+                content: llmResponse.content,
+                toolCalls: llmResponse.toolCalls,
+                toolCallId: nil,
+                name: nil
+            )
+            
+            return (chatMessage, nil)
+        } catch {
             #if DEBUG
-            print("[AetherAgent] Bad server response with status code: \(httpResponse.statusCode)")
+            print("[AetherAgent] LLM Error: \(error.localizedDescription)")
             #endif
-            throw URLError(.badServerResponse)
+            return (nil, error)
         }
-        
-        guard !data.isEmpty else {
-            #if DEBUG
-            print("[AetherAgent] Warning: No data returned from API.")
-            #endif
-            throw NSError(domain: "OpenAI", code: 2, userInfo: [NSLocalizedDescriptionKey: "No data returned from API."])
-        }
-        
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        
-        struct APIResponse: Codable {
-            struct Choice: Codable {
-                let message: ChatMessage
-            }
-            let choices: [Choice]
-        }
-        
-        let apiResponse = try decoder.decode(APIResponse.self, from: data)
-        return (apiResponse.choices.first?.message, nil)
     }
 }
 

@@ -9,6 +9,7 @@ MacAssist is a powerful, open-source voice assistant for macOS, designed to inte
 Aether is designed to run locally on your machine, ensuring that your data and interactions remain private. The application is built with SwiftUI, providing a clean and modern user interface that feels right at home on macOS.
 
 ## Table of Contents
+
 - [Screenshot](#screenshot)
 - [Features](#features)
 - [Getting Started](#getting-started)
@@ -18,7 +19,6 @@ Aether is designed to run locally on your machine, ensuring that your data and i
 
 ## Screenshot
 
-
 <p align="center">
   <img src="misc/chat_ui.png" alt="Chat Ui" width="300"/>
   <img src="misc/history.png" alt="History" width="300"/>
@@ -26,14 +26,13 @@ Aether is designed to run locally on your machine, ensuring that your data and i
   <img src="misc/settings.png" alt="Settings" width="300"/>
 </p>
 
-
 ## Features
 
-*   **Voice-activated:** Control your Mac with your voice.
-*   **Local AI:** All processing is done on your device, ensuring privacy and speed.
-*   **Extensible:** Easily add new commands and integrations.
-*   **SwiftUI Interface:** A clean and modern user interface.
-*   **Open Source:** Contribute to the development of MacAssist.
+- **Voice-activated:** Control your Mac with your voice.
+- **Local AI:** All processing is done on your device, ensuring privacy and speed.
+- **Extensible:** Easily add new commands and integrations.
+- **SwiftUI Interface:** A clean and modern user interface.
+- **Open Source:** Contribute to the development of MacAssist.
 
 ## Getting Started
 
@@ -72,44 +71,47 @@ For an example of how to implement a tool, see the `SystemTools.swift` file.
 
 The project is divided into the following directories:
 
-*   **Application:** Contains the main application logic.
-*   **Assets.xcassets:** Contains the application's assets, such as icons and images.
-*   **Core:** Contains the core components of the application, such as models and services.
-*   **Logic:** Contains the business logic of the application, such as managers and view models.
-*   **Tools:** Contains the tools that the AI can use to perform actions.
-*   **UI:** Contains the user interface of the application, such as views and components.
+- **Application:** Contains the main application logic.
+- **Assets.xcassets:** Contains the application's assets, such as icons and images.
+- **Core:** Contains the core components of the application, such as models and services.
+- **Logic:** Contains the business logic of the application, such as managers and view models.
+- **Tools:** Contains the tools that the AI can use to perform actions.
+- **UI:** Contains the user interface of the application, such as views and components.
 
 ### Dependencies
 
 The project uses the following Apple frameworks:
 
-*   **SwiftUI:** For the user interface.
-*   **AppKit:** For native macOS controls.
-*   **Foundation:** For core data types and services.
-*   **Combine:** For reactive programming.
-*   **Speech:** For speech recognition.
-*   **AVFoundation:** For audio playback.
-*   **Carbon:** For low-level system events.
+- **SwiftUI:** For the user interface.
+- **AppKit:** For native macOS controls.
+- **Foundation:** For core data types and services.
+- **Combine:** For reactive programming.
+- **Speech:** For speech recognition.
+- **AVFoundation:** For audio playback.
+- **Carbon:** For low-level system events.
 
 The project has no external dependencies.
 
 ## Roadmap
 
-*   **LLM Agnostic:** Add support for different llms like gemini, claude or ollama.
-*   **Support for more languages:** Add support for languages other than English.
-*   **Plugin system:** Allow developers to create and share plugins that add new features to MacAssist.
-*   **Improved UI:** Continue to improve the user interface and user experience.
-*   **More tools:** Add more tools to the AI's arsenal.
+- **✅ LLM Agnostic:** MacAssist now supports multiple LLM providers:
+  - **OpenAI** - GPT-4 and later models
+  - **Google Gemini** - Gemini 1.5 Pro and Flash
+  - **Ollama** - Run local models (llama3.1, mistral, etc.)
+- **Support for more languages:** Add support for languages other than English.
+- **Plugin system:** Allow developers to create and share plugins that add new features to MacAssist.
+- **Improved UI:** Continue to improve the user interface and user experience.
+- **More tools:** Add more tools to the AI's arsenal.
 
 ## Contact
 
-*   **Email:** aman.senpai@outlook.com
-*   **X:** [@AmanSenpai](https://x.com/amansenpai)
-*   **GitHub:** [aman-senpai](https://github.com/aman-senpai)
+- **Email:** aman.senpai@outlook.com
+- **X:** [@AmanSenpai](https://x.com/amansenpai)
+- **GitHub:** [aman-senpai](https://github.com/aman-senpai)
 
 ## Acknowledgments
 
-*   Thanks to the open-source community for providing the tools and resources to make this project possible.
+- Thanks to the open-source community for providing the tools and resources to make this project possible.
 
 ## Disclaimer
 
@@ -119,8 +121,8 @@ This project is still in development and may not be stable. Use at your own risk
 
 If you need help with the project, you can:
 
-*   **Open an issue on GitHub:** [https://github.com/aman-senpai/MacAssist/issues](https://github.com/aman-senpai/MacAssist/issues)
-*   **Email the developers:** aman.senpai@outlook.com
+- **Open an issue on GitHub:** [https://github.com/aman-senpai/MacAssist/issues](https://github.com/aman-senpai/MacAssist/issues)
+- **Email the developers:** aman.senpai@outlook.com
 
 ## FAQ
 
@@ -154,11 +156,11 @@ If you discover a security vulnerability, please report it to us by emailing ama
 
 ## Release History
 
-*   **0** - Initial release
+- **0** - Initial release
 
 ## Credits
 
-*   **aman-senpai:** Project lead and developer
+- **aman-senpai:** Project lead and developer
 
 ## Show your support
 
@@ -166,7 +168,7 @@ Give a ⭐️ if this project helped you!
 
 ## Authors
 
-*   **aman-senpai** - *Initial work* - [aman-senpai](https://github.com/aman-senpai)
+- **aman-senpai** - _Initial work_ - [aman-senpai](https://github.com/aman-senpai)
 
 See also the list of [contributors](https://github.com/aman-senpai/MacAssist/contributors) who participated in in this project.
 
@@ -176,15 +178,18 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 
 ## Built With
 
-*   [Swift](https://swift.org/) - The programming language used.
-*   [SwiftUI](https://developer.apple.com/xcode/swiftui/) - The UI framework used.
-*   [Xcode](https://developer.apple.com/xcode/) - The IDE used.
-*   [OpenAI](https://openai.com/api/) - The current llm provider.
+- [Swift](https://swift.org/) - The programming language used.
+- [SwiftUI](https://developer.apple.com/xcode/swiftui/) - The UI framework used.
+- [Xcode](https://developer.apple.com/xcode/) - The IDE used.
+- **LLM Providers:**
+  - [OpenAI](https://openai.com/api/) - GPT models support
+  - [Google Gemini](https://ai.google.dev/) - Gemini models support
+  - [Ollama](https://ollama.ai/) - Local model support
 
 ## Prerequisites
 
-*   macOS 26.0 or later
-*   Xcode 26.1.1. or later
+- macOS 26.0 or later
+- Xcode 26.1.1. or later
 
 ## Installation
 
@@ -201,27 +206,22 @@ To run the tests for this project, you will need to have Xcode installed on your
 
 ## Known Issues
 
-*   There are no known issues at this time.
+- There are no known issues at this time.
 
 ## Troubleshooting
 
-*   If you are having trouble with the hotkey, make sure that you have granted the necessary accessibility permissions in System Settings.
-*   If you are having trouble with speech recognition, make sure that you have granted the necessary microphone and speech recognition permissions in System Settings.
-
+- If you are having trouble with the hotkey, make sure that you have granted the necessary accessibility permissions in System Settings.
+- If you are having trouble with speech recognition, make sure that you have granted the necessary microphone and speech recognition permissions in System Settings.
 
 #### Added
 
-*   Initial release
+- Initial release
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-
-
 ## Project Status
-
-
 
 This project is currently in **alpha**. It is not yet ready for production use.
 
@@ -231,10 +231,10 @@ This project is currently in **alpha**. It is not yet ready for production use.
 
 ## Examples
 
-*   "Open Safari"
-*   "What's the weather today?"
-*   "Set a timer for 10 minutes"
-*   "Write an email for 5 days leave"
+- "Open Safari"
+- "What's the weather today?"
+- "Set a timer for 10 minutes"
+- "Write an email for 5 days leave"
 
 ## API Reference
 
@@ -242,37 +242,35 @@ This project does not have an API.
 
 ## To-Do
 
-*   [ ] Add support for more languages
-*   [ ] Add a plugin system
-*   [ ] Improve the UI
-*   [ ] Add more tools
-*   [ ] Make it LLM Agnostic
-
+- [ ] Add support for more languages
+- [ ] Add a plugin system
+- [ ] Improve the UI
+- [ ] Add more tools
 
 ## Terms of Use
 
 By using this project, you agree to the following terms of use:
 
-*   This project is for educational purposes only.
-*   The author is not responsible for any damage caused by this project.
-*   Use at your own risk.
+- This project is for educational purposes only.
+- The author is not responsible for any damage caused by this project.
+- Use at your own risk.
 
 ## Say Thanks
 
-*   Tweet about this project
-*   Star this project on GitHub
+- Tweet about this project
+- Star this project on GitHub
 
 ## About the Author
 
 **aman-senpai** is a product engineer with a passion for open-source projects. He is the creator of MacAssist and is always looking for new ways to improve the project.
 
-*   **GitHub:** [aman-senpai](https://github.com/aman-senpai)
-*   **X:** [@AmanSenpai](https://x.com/amansenpai)
-*   **LinkedIn:** [aman-senpai](https://www.linkedin.com/in/aman-senpai)
+- **GitHub:** [aman-senpai](https://github.com/aman-senpai)
+- **X:** [@AmanSenpai](https://x.com/amansenpai)
+- **LinkedIn:** [aman-senpai](https://www.linkedin.com/in/aman-senpai)
 
 ## Sitemap
 
-*   [Home](README.md)
-*   [Contributing](CONTRIBUTING.md)
-*   [Code of Conduct](CODE_OF_CONDUCT.md)
-*   [License](LICENSE)
+- [Home](README.md)
+- [Contributing](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [License](LICENSE)

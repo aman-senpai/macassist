@@ -134,11 +134,15 @@ class ConversationManager: NSObject, ObservableObject, SFSpeechRecognizerDelegat
         speechRecognizer?.delegate = self
         speechSynthesizer.delegate = self
         
-        // Initialize OpenAI Service
+        // Initialize AI Service with current provider
         do {
+            // Migrate legacy settings if needed
+            if !UserDefaults.standard.bool(forKey: "llm_settings_migrated") {
+                LLMSettings.migrateFromLegacySettings()
+            }
             self.openAIService = try AIService()
         } catch {
-            print("Failed to initialize OpenAI Service: \(error.localizedDescription)")
+            print("Failed to initialize AI Service: \(error.localizedDescription)")
             self.state = .error(error as? ConversationError ?? .conversationManagerNotReady)
         }
 
@@ -326,8 +330,10 @@ class ConversationManager: NSObject, ObservableObject, SFSpeechRecognizerDelegat
                 }
             } catch let serviceError as AIServiceError {
                 DispatchQueue.main.async {
-                    print("OpenAI Service Error: \(serviceError.localizedDescription)")
-                    self.state = .error(.openAIError(serviceError))
+                    print("AI Service Error: \(serviceError.localizedDescription)")
+                    // Convert AIServiceError to ConversationError
+                    let error = ConversationError.unknownError(serviceError)
+                    self.state = .error(error)
                     self.userTranscript = "" // Clear transcript on error.
                 }
             } catch {
