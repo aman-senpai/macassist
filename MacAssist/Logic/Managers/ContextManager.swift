@@ -4,13 +4,25 @@ import SwiftUI
 
 struct ContextItem: Codable, Identifiable, Hashable {
     let id: UUID
+    var title: String
     var text: String
     var isEnabled: Bool
     
-    init(id: UUID = UUID(), text: String, isEnabled: Bool = true) {
+    init(id: UUID = UUID(), title: String = "New Context", text: String, isEnabled: Bool = true) {
         self.id = id
+        self.title = title
         self.text = text
         self.isEnabled = isEnabled
+    }
+    
+    // Custom decoding to handle legacy data without 'title'
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        text = try container.decode(String.self, forKey: .text)
+        isEnabled = try container.decode(Bool.self, forKey: .isEnabled)
+        // Default title if missing
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? "New Context"
     }
 }
 
