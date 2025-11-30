@@ -11,28 +11,30 @@ struct MessageBubbleView: View {
             if message.role == "user" {
                 Spacer(minLength: 20)
                 
-                // Copy button for user (appears on left of message)
-                if isHovering {
-                    copyButton
-                }
-                
                 Text(.init(message.content ?? "No message"))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(Color.gray.opacity(0.3))
                     .foregroundColor(.primary)
                     .cornerRadius(16)
+                    .overlay(alignment: .leading) {
+                        if isHovering {
+                            copyButton
+                                .offset(x: -40) // Position to the left of the bubble
+                        }
+                    }
             } else {
                 Text(.init(message.content ?? "No message"))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .foregroundColor(.primary)
-                
-                // Copy button for assistant (appears on right of message)
-                if isHovering {
-                    copyButton
-                }
+                    .overlay(alignment: .trailing) {
+                        if isHovering {
+                            copyButton
+                                .offset(x: 40) // Position to the right of the bubble
+                        }
+                    }
                 
                 Spacer(minLength: 20)
             }
