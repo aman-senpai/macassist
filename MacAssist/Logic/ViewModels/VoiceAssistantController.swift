@@ -226,16 +226,15 @@ final class VoiceAssistantController: NSObject, ObservableObject, AVSpeechSynthe
             stopAudioEngine()
         }
     
-        private func stopAudioEngine() {
+    private func stopAudioEngine() {
         // This is now the single, robust cleanup function. It is safe to call multiple times.
         
-        // Remove tap FIRST if engine is running
+        let inputNode = audioEngine.inputNode
+        // Always attempt to remove the tap. installTap will crash if a tap exists,
+        // regardless of whether the engine is running or not.
+        inputNode.removeTap(onBus: 0)
+        
         if audioEngine.isRunning {
-            let inputNode = audioEngine.inputNode
-            // Check if there's actually a tap to remove
-            if inputNode.numberOfInputs > 0 {
-                inputNode.removeTap(onBus: 0)
-            }
             audioEngine.stop()
         }
         
