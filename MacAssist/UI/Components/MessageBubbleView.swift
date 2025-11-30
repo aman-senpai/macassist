@@ -11,34 +11,31 @@ struct MessageBubbleView: View {
             if message.role == "user" {
                 Spacer(minLength: 20)
                 
+                // Copy button for user (left side)
+                copyButton
+                    .opacity(isHovering ? 1 : 0)
+                
                 Text(.init(message.content ?? "No message"))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(Color.gray.opacity(0.3))
                     .foregroundColor(.primary)
                     .cornerRadius(16)
-                    .overlay(alignment: .leading) {
-                        if isHovering {
-                            copyButton
-                                .offset(x: -40) // Position to the left of the bubble
-                        }
-                    }
             } else {
                 Text(.init(message.content ?? "No message"))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .foregroundColor(.primary)
-                    .overlay(alignment: .trailing) {
-                        if isHovering {
-                            copyButton
-                                .offset(x: 40) // Position to the right of the bubble
-                        }
-                    }
+                
+                // Copy button for assistant (right side)
+                copyButton
+                    .opacity(isHovering ? 1 : 0)
                 
                 Spacer(minLength: 20)
             }
         }
+        .contentShape(Rectangle()) // Ensure the entire area (including gaps) is hit-testable for hover
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.2)) {
                 isHovering = hovering
