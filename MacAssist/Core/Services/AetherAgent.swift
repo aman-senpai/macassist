@@ -138,6 +138,7 @@ final class AetherAgent: ObservableObject {
     
     private let systemTools = SystemTools()
     private let historyManager: HistoryManager
+    private let contextManager: ContextManager // NEW: ContextManager reference
     private var conversationID: UUID
     
     private let systemPrompt = ChatMessage(id: UUID(), role: "system", content: """
@@ -185,7 +186,7 @@ final class AetherAgent: ObservableObject {
         *   **Tool Outputs:** Don't parrot tool output. If `openApplication` succeeds, say "I've opened that for you."
 
         ### 4. Handling Ambiguity
-        *   If a request is vague (e.g., "Summarize this"), ask **one concise clarifying question** (e.g., "Should I summarize the text in the foreground app?").
+        *   **If a request is vague (e.g., "Summarize this"), ask **one concise clarifying question** (e.g., "Should I summarize the text in the foreground app?").
         *   Do not guess on irreversible actions.
 
         ### 5. File Handling & Robustness
@@ -207,12 +208,22 @@ final class AetherAgent: ObservableObject {
     private var history: [ChatMessage] = []
     
     
-    init(historyManager: HistoryManager) {
+    init(historyManager: HistoryManager, contextManager: ContextManager) {
         self.historyManager = historyManager
+        self.contextManager = contextManager
         self.conversationID = UUID() // Assign a unique ID for this session
         AetherAgent.checkAndRequestPermissions()
         
         history.append(systemPrompt)
+        
+        // Inject active contexts
+        let activeContexts = contextManager.contexts.filter { $0.isEnabled }
+        if !activeContexts.isEmpty {
+            let contextString = activeContexts.map { $0.text }.joined(separator: "\n\n")
+            let contextMessage = ChatMessage(role: "system", content: "User Context:\n\(contextString)")
+            history.append(contextMessage)
+        }
+        
         messages.append(ChatMessage(id: UUID(), role: "assistant", content: "Hello! Enter your query to start."))
         currentAgentStatus = .idle
     }
@@ -410,6 +421,15 @@ final class AetherAgent: ObservableObject {
         // Reset state
         self.conversationID = UUID()
         self.history = [systemPrompt]
+        
+        // Inject active contexts
+        let activeContexts = contextManager.contexts.filter { $0.isEnabled }
+        if !activeContexts.isEmpty {
+            let contextString = activeContexts.map { $0.text }.joined(separator: "\n\n")
+            let contextMessage = ChatMessage(role: "system", content: "User Context:\n\(contextString)")
+            history.append(contextMessage)
+        }
+        
         self.messages = [ChatMessage(id: UUID(), role: "assistant", content: "Hello! Enter your query to start.")]
         self.currentAgentStatus = .idle
         self.spokenResponse = nil

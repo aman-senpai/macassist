@@ -15,6 +15,7 @@ import AVFoundation
 final class VoiceAssistantController: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     // MARK: - Published Properties for UI
     @Published var agent: AetherAgent // Removed default AetherAgent() initializer
+    @Published var contextManager: ContextManager // NEW: ContextManager instance
     @Published var currentInput: String = ""
     @Published var isRecording: Bool = false
     @Published var isContinuousConversationActive: Bool = false
@@ -37,7 +38,9 @@ final class VoiceAssistantController: NSObject, ObservableObject, AVSpeechSynthe
     
     // MARK: - Initialization
     init(historyManager: HistoryManager) {
-        self.agent = AetherAgent(historyManager: historyManager)
+        let contextManager = ContextManager()
+        self.contextManager = contextManager
+        self.agent = AetherAgent(historyManager: historyManager, contextManager: contextManager)
         super.init()
         speechSynthesizer.delegate = self
         

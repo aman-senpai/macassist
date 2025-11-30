@@ -13,6 +13,7 @@ import AVFoundation
 struct ContentView: View {
     @EnvironmentObject var controller: VoiceAssistantController
     @EnvironmentObject var historyManager: HistoryManager
+    @EnvironmentObject var contextManager: ContextManager // NEW: Inject ContextManager
     
     @State private var selectedTab: Int = 0
     @AppStorage("openAIApiKey") private var openAIApiKey: String = ""
@@ -36,6 +37,12 @@ struct ContentView: View {
                         Label("History", systemImage: "clock.fill")
                     }
                 
+                ContextView()
+                    .tag(3)
+                    .tabItem {
+                        Label("Context", systemImage: "doc.text.fill")
+                    }
+                
                 settingsView
                     .tag(2)
                     .tabItem {
@@ -53,6 +60,7 @@ struct ContentView: View {
         }, message: {
             Text(controller.speechErrorMessage)
         })
+        .environmentObject(controller.contextManager) // Inject ContextManager from controller
     }
 
     private var chatView: some View {
@@ -194,4 +202,5 @@ struct ContentView: View {
     return ContentView()
         .environmentObject(VoiceAssistantController(historyManager: historyManager))
         .environmentObject(historyManager)
+        .environmentObject(ContextManager())
 }
