@@ -2,12 +2,19 @@ import SwiftUI
 
 struct HistoryView: View {
     @EnvironmentObject var historyManager: HistoryManager
+    @State private var selectedConversationId: UUID?
 
     var body: some View {
         NavigationView {
             List {
                 ForEach(historyManager.conversationHistory) { conversation in
-                    NavigationLink(destination: ConversationDetailView(historyManager: historyManager, conversation: conversation)) {
+                    NavigationLink(destination: ConversationDetailView(conversation: conversation, onDelete: {
+                        self.selectedConversationId = nil
+                        // Delay the deletion slightly to allow the navigation to pop back
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                            historyManager.deleteConversation(conversation)
+                        }
+                    }), tag: conversation.id, selection: $selectedConversationId) {
                         VStack(alignment: .leading) {
                             Text("Conversation from \(conversation.timestamp, formatter: itemFormatter)")
                             Text(conversation.messages.first?.content ?? "No messages")
@@ -26,9 +33,8 @@ struct HistoryView: View {
 }
 
 struct ConversationDetailView: View {
-    var historyManager: HistoryManager
     let conversation: Conversation
-    @Environment(\.presentationMode) var presentationMode
+    let onDelete: () -> Void
 
     var body: some View {
         ScrollView {
@@ -49,10 +55,7 @@ struct ConversationDetailView: View {
         .navigationTitle("Details")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button(action: {
-                    historyManager.deleteConversation(conversation)
-                    presentationMode.wrappedValue.dismiss()
-                }) {
+                Button(action: onDelete) {
                     Image(systemName: "trash")
                 }
             }
